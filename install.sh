@@ -28,18 +28,17 @@ setup_dirs() {
     touch "$PROJECT_DIR/logs/install.log" "$PROJECT_DIR/logs/error.log"
 }
 
-# 📈 Simple progress bar
+# 📈 Simple progress bar (always completes to 100%)
 progress_bar() {
     local duration=$1
     local width=30
-    for ((i=0; i<=duration; i++)); do
-        local progress=$((i * width / duration))
-        local done=$((progress * width / 100))
+    for ((i=0; i<=100; i+=5)); do
+        local done=$((i * width / 100))
         local undone=$((width - done))
         local done_bar=$(printf "%${done}s" | tr ' ' '█')
         local undone_bar=$(printf "%${undone}s" | tr ' ' ' ')
-        printf "\r${YELLOW}Processing... [${done_bar}${undone_bar}] $((progress))%%${NC}"
-        sleep 0.1
+        printf "\r${YELLOW}Processing... [${done_bar}${undone_bar}] $i%%${NC}"
+        sleep $(echo "$duration/20" | bc -l)
     done
     echo -e "\n"
 }
@@ -53,10 +52,10 @@ install_system_deps() {
     sudo apt-get install -y git python3 python3-pip python3-venv jq >> "$LOG_FILE" 2>&1 || {
         echo -e "${RED}❌ Failed to install dependencies. Check $LOG_FILE for details.${NC}"
         read -p "Press Enter to continue..."
-        exit 1
+        return 1
     }
     echo -e "${GREEN}🎉 System dependencies installed!${NC}"
-    read -p "Press Enter to continue..."
+    return 0
 }
 
 # 🚀 Function to install project
@@ -69,24 +68,37 @@ install_project() {
         git clone "$REPO_URL" "$PROJECT_DIR" >> "$LOG_FILE" 2>&1 || {
             echo -e "${RED}❌ Failed to clone repository. Check $LOG_FILE for details.${NC}"
             read -p "Press Enter to continue..."
-            exit 1
+            return 1
         }
     fi
-    cd "$PROJECT_DIR" || exit 1
+    cd "$PROJECT_DIR" || {
+        echo -e "${RED}❌ Failed to access project directory${NC}"
+        read -p "Press Enter to continue..."
+        return 1
+    }
     echo -e "${CYAN}🛠 Creating virtual environment...${NC}"
     python3 -m venv venv
     source venv/bin/activate
     echo -e "${CYAN}📦 Installing Python dependencies...${NC}"
     progress_bar 10
     pip install --upgrade pip >> "$LOG_FILE" 2>&1
+    # Create requirements.txt if it doesn't exist
+    if [ ! -f requirements.txt ]; then
+        echo -e "${CYAN}📝 Creating requirements.txt...${NC}"
+        cat > requirements.txt <<EOF
+requests
+schedule
+EOF
+    fi
     pip install -r requirements.txt >> "$LOG_FILE" 2>&1 || {
         echo -e "${RED}❌ Failed to install Python dependencies. Check $LOG_FILE for details.${NC}"
         read -p "Press Enter to continue..."
-        exit 1
+        return 1
     }
     echo -e "${GREEN}🎉 Project installed successfully!${NC}"
     echo -e "Run it with: ${CYAN}source $VENV_DIR/bin/activate; python3 report.py${NC}"
     read -p "Press Enter to continue..."
+    return 0
 }
 
 # ⚙️ Function to configure config.json
@@ -128,23 +140,31 @@ update_project() {
     cd "$PROJECT_DIR" || {
         echo -e "${RED}❌ Project directory not found${NC}"
         read -p "Press Enter to continue..."
-        exit 1
+        return 1
     }
     echo -e "${CYAN}📥 Pulling latest changes...${NC}"
     progress_bar 8
     git pull origin main >> "$LOG_FILE" 2>&1 || {
         echo -e "${RED}❌ Failed to pull latest changes. Check $LOG_FILE for details.${NC}"
         read -p "Press Enter to continue..."
-        exit 1
+        return 1
     }
     source venv/bin/activate
     echo -e "${CYAN}📦 Updating Python dependencies...${NC}"
     progress_bar 8
     pip install --upgrade pip >> "$LOG_FILE" 2>&1
+    # Ensure requirements.txt exists
+    if [ ! -f requirements.txt ]; then
+        echo -e "${CYAN}📝 Creating requirements.txt...${NC}"
+        cat > requirements.txt <<EOF
+requests
+schedule
+EOF
+    fi
     pip install -r requirements.txt >> "$LOG_FILE" 2>&1 || {
         echo -e "${RED}❌ Failed to update Python dependencies. Check $LOG_FILE for details.${NC}"
         read -p "Press Enter to continue..."
-        exit 1
+        return 1
     }
     # Show project version if available
     VERSION=$(git describe --tags 2>/dev/null || echo "Unknown")
@@ -160,8 +180,8 @@ setup_service() {
     if [ ! -f "$CONFIG_FILE" ]; then
         echo -e "${RED}❌ Config file not found. Please configure it first.${NC}"
         read -p "Press Enter to continue..."
-        exit 1
-    fi
+        return 1
+    }
     echo -e "${CYAN}⚙️ Creating service file...${NC}"
     progress_bar 5
     sudo bash -c "cat > $SERVICE_FILE" <<EOF
@@ -349,7 +369,7 @@ while true; do
     read -p "Choose an option: " choice
 
     case $choice in
-        1) install_system_deps; install_project ;;
+        1) install_system_deps && install_project ;;
         2) configure_json ;;
         3) update_project ;;
         4) service_management ;;
