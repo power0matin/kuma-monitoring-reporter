@@ -1,8 +1,19 @@
 import json
+import logging
+import time
+import schedule
+
 from core.fetcher import fetch_metrics
 from core.parser import parse_prometheus_metrics
 from core.formatter import format_message
 from notifier.telegram import send_telegram_message
+
+logging.basicConfig(
+    filename="logs/error.log",
+    level=logging.ERROR,
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 def load_config():
@@ -20,8 +31,18 @@ def main():
             config["telegram_bot_token"], config["telegram_chat_id"], message
         )
     except Exception as e:
+        logging.error(f"Error in main: {e}")
         print(f"[!] Error: {e}")
 
 
-if __name__ == "__main__":
+def job():
     main()
+
+
+if __name__ == "__main__":
+    job()  # اجرای فوری
+    schedule.every(30).minutes.do(job)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

@@ -1,8 +1,8 @@
 def format_message(metrics, thresholds):
     response_times = metrics.get("monitor_response_time", [])
     statuses = {
-        tuple(l["monitor_name"] for l, _ in metrics["monitor_status"]): v
-        for l, v in metrics.get("monitor_status", [])
+        labels["monitor_name"]: value
+        for labels, value in metrics.get("monitor_status", [])
     }
 
     msg_lines = ["📊 *Uptime Kuma Status Report*"]
@@ -15,9 +15,9 @@ def format_message(metrics, thresholds):
             emoji = "🔴"
             line = f"{emoji} *{name}* is *DOWN*"
         else:
-            if response_time < thresholds["warning"]:
+            if response_time < thresholds["good"]:
                 emoji = "🟢"
-            elif response_time < thresholds["critical"]:
+            elif response_time < thresholds["warning"]:
                 emoji = "🟡"
             else:
                 emoji = "🔴"

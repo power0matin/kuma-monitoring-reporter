@@ -4,7 +4,6 @@ REPO_URL="https://github.com/power0matin/kuma-monitoring-reporter.git"
 INSTALL_DIR="$HOME/kuma-monitoring-reporter"
 CONFIG_FILE="$INSTALL_DIR/config/config.json"
 
-# Pre-checks
 command -v git >/dev/null 2>&1 || { echo "❌ Git is not installed. Please install Git."; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "❌ Python3 is not installed."; exit 1; }
 command -v pip3 >/dev/null 2>&1 || { echo "❌ pip3 is not installed."; exit 1; }
@@ -25,7 +24,7 @@ function install_project() {
   python3 -m venv venv
   source venv/bin/activate
   echo "📦 Installing dependencies..."
-  python3 -m pip install -r requirements.txt
+  pip install -r requirements.txt
   deactivate
 
   echo "✅ Installation completed successfully."
