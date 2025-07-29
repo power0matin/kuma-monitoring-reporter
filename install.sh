@@ -111,7 +111,7 @@ setup_service() {
     if [ ! -f "$CONFIG_FILE" ]; then
         echo -e "${RED}❌ Config file not found. Please configure it first.${NC}"
         exit 1
-    }
+    fi
     sudo bash -c "cat > $SERVICE_FILE" <<EOF
 [Unit]
 Description=Kuma Monitoring Reporter Service
