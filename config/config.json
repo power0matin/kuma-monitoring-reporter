@@ -1,11 +1,12 @@
 {
-  "kuma_url": "http://localhost:3001/metrics",
-  "telegram_bot_token": "123456789:ABCDEF...",
-  "telegram_chat_id": "987654321",
-  "auth_token": "your_api_token_here",
+  "kuma_url": "http://<your-kuma-host>:3001/metrics",
+  "telegram_bot_token": "<your-telegram-bot-token>",
+  "telegram_chat_id": "<your-telegram-chat-id>",
+  "auth_token": "<your-uptime-kuma-api-token>",
   "thresholds": {
     "good": 200,
     "warning": 500,
     "critical": 1000
-  }
+  },
+  "report_interval": 1
 }

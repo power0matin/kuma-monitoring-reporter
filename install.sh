@@ -31,6 +31,31 @@ function install_project() {
   echo "➕ First run: source $INSTALL_DIR/venv/bin/activate; python3 report.py"
 }
 
+function update_project() {
+  echo "🔄 Updating kuma-monitoring-reporter project ..."
+
+  if [ ! -d "$INSTALL_DIR" ]; then
+    echo "❌ Project directory does not exist: $INSTALL_DIR"
+    echo "Please install the project first using option 1."
+    exit 1
+  fi
+
+  cd "$INSTALL_DIR" || exit
+  echo "📥 Pulling latest changes from repository..."
+  git pull origin main || {
+    echo "❌ Failed to update repository."
+    exit 1
+  }
+
+  echo "📦 Updating dependencies..."
+  source venv/bin/activate
+  pip install -r requirements.txt
+  deactivate
+
+  echo "✅ Project updated successfully."
+  echo "➕ Run the project: source $INSTALL_DIR/venv/bin/activate; python3 report.py"
+}
+
 function edit_config() {
   echo "⚙️ config.json file configuration"
 
@@ -43,6 +68,7 @@ function edit_config() {
   read -p "🟢 Good threshold (ms): " good
   read -p "🟡 Warning threshold (ms): " warning
   read -p "🔴 Critical threshold (ms): " critical
+  read -p "⏰ Report interval (minutes, e.g. 1 for every minute): " report_interval
 
   cat > "$CONFIG_FILE" <<EOF
 {
@@ -54,7 +80,8 @@ function edit_config() {
     "good": $good,
     "warning": $warning,
     "critical": $critical
-  }
+  },
+  "report_interval": $report_interval
 }
 EOF
 
@@ -78,7 +105,8 @@ function menu() {
   echo "-------------------------------------------"
   echo "1️⃣ Install project"
   echo "2️⃣ Configure config.json file"
-  echo "3️⃣ Completely remove project"
+  echo "3️⃣ Update project"
+  echo "4️⃣ Completely remove project"
   echo "0️⃣ Exit"
   echo "-------------------------------------"
 
@@ -87,7 +115,8 @@ function menu() {
   case $choice in
     1) install_project ;;
     2) edit_config ;;
-    3) uninstall_project ;;
+    3) update_project ;;
+    4) uninstall_project ;;
     0) echo "👋 Bye!"; exit 0 ;;
     *) echo "❌ Invalid option"; sleep 2; menu ;;
   esac
