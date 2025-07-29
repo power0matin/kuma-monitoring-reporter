@@ -3,6 +3,8 @@ import logging
 import time
 import schedule
 import os
+from notifier.telegram import send_telegram_message
+
 
 from core.fetcher import fetch_metrics
 from core.parser import parse_prometheus_metrics

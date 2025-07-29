@@ -3,6 +3,7 @@ import requests
 import logging
 import os
 
+
 os.makedirs("logs", exist_ok=True)
 
 
@@ -25,7 +26,7 @@ def load_config():
         raise
 
 
-def send_message(message, test_mode=False):
+def send_telegram_message(message, test_mode=False):
     config = load_config()
     bot_token = config.get("telegram_bot_token")
     chat_id = config.get("telegram_chat_id")
@@ -62,5 +63,5 @@ def send_message(message, test_mode=False):
 
 def test_telegram_notification():
     test_message = "Test message from Kuma Monitoring Reporter"
-    result = send_message(test_message, test_mode=True)
+    result = send_telegram_message(test_message, test_mode=True)
     return result
