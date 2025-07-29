@@ -4,13 +4,14 @@ last_statuses = {}  # برای ذخیره وضعیت قبلی مانیتورها
 
 
 def format_message(metrics, thresholds):
+    """Format metrics into a Telegram message."""
     global last_statuses
     response_times = metrics.get("monitor_response_time", [])
     statuses = {
         labels["monitor_name"]: value
         for labels, value in metrics.get("monitor_status", [])
     }
-    messages = metrics.get("monitor_msg", [])  # پیام‌های خطا یا وضعیت
+    messages = metrics.get("monitor_msg", [])
     monitor_types = {
         labels["monitor_name"]: labels.get("monitor_type", "Unknown")
         for labels, _ in response_times
@@ -35,7 +36,6 @@ def format_message(metrics, thresholds):
         )
         current_state = (status, response_time, error_msg)
 
-        # فقط اگه وضعیت تغییر کرده، اضافه کن
         if name not in last_statuses or last_statuses[name] != current_state:
             changed = True
             if status == 0:
@@ -71,10 +71,9 @@ def format_message(metrics, thresholds):
         for labels, response_time in response_times
     }
 
-    # اضافه کردن خلاصه وضعیت
     msg_lines.append("════════════════════════════")
     msg_lines.append(f"📈 *Summary*: {up_count} UP, {down_count} DOWN")
 
     if not changed:
-        return None  # اگه تغییری نبود، پیامی نفرست
+        return None
     return "\n".join(msg_lines)
