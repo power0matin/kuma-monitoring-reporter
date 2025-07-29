@@ -12,6 +12,7 @@ command -v git >/dev/null 2>&1 || { echo "Git is not installed. Please install G
 command -v python3 >/dev/null 2>&1 || { echo "Python3 is not installed."; exit 1; }
 command -v pip3 >/dev/null 2>&1 || { echo "pip3 is not installed."; exit 1; }
 command -v systemctl >/dev/null 2>&1 || { echo "Systemd is not installed."; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "jq is not installed. Please install jq for Telegram testing."; exit 1; }
 
 function install_project() {
   echo "Installing kuma-monitoring-reporter project ..."
@@ -84,7 +85,7 @@ function edit_config() {
   if ! [[ "$report_interval" =~ ^[0-9]+$ ]] || [ "$report_interval" -lt 1 ]; then
     echo "Report interval must be a positive integer."
     exit 1
-  
+  fi
 
   cat > "$CONFIG_FILE" <<EOF
 {
@@ -114,7 +115,7 @@ function setup_systemd() {
       echo "Operation canceled."
       return 1
     fi
-  
+  fi
 
   cat > "$SYSTEMD_SERVICE" <<EOF
 [Unit]
@@ -176,16 +177,14 @@ function test_telegram() {
     exit 1
   fi
 
-  # خواندن تنظیمات تلگرام
   telegram_bot_token=$(jq -r '.telegram_bot_token' "$CONFIG_FILE")
   telegram_chat_id=$(jq -r '.telegram_chat_id' "$CONFIG_FILE")
 
   if [ -z "$telegram_bot_token" ] || [ -z "$telegram_chat_id" ]; then
     echo "Invalid Telegram configuration in $CONFIG_FILE"
     exit 1
-  
+  fi
 
-  # ارسال پیام تستی
   curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
     -d "chat_id=$telegram_chat_id" \
     -d "text=Test message from kuma-monitoring-reporter" >/dev/null
