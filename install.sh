@@ -1,338 +1,293 @@
 #!/bin/bash
 
+# 🌟 Automatic installer for kuma-monitoring-reporter 🌟
+
 REPO_URL="https://github.com/power0matin/kuma-monitoring-reporter.git"
-INSTALL_DIR="$HOME/kuma-monitoring-reporter"
-CONFIG_FILE="$INSTALL_DIR/config/config.json"
-SYSTEMD_SERVICE="/etc/systemd/system/kuma-reporter.service"
-BACKUP_DIR="/tmp/kuma-backup"
-LOG_FILE="$INSTALL_DIR/logs/error.log"
+PROJECT_DIR="$HOME/kuma-monitoring-reporter"
+VENV_DIR="$PROJECT_DIR/venv"
+CONFIG_FILE="$PROJECT_DIR/config/config.json"
+SERVICE_NAME="kuma-reporter"
+SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 
-# چک کردن پیش‌نیازها
-command -v git >/dev/null 2>&1 || { echo "Git is not installed. Please install Git."; exit 1; }
-command -v python3 >/dev/null 2>&1 || { echo "Python3 is not installed."; exit 1; }
-command -v pip3 >/dev/null 2>&1 || { echo "pip3 is not installed."; exit 1; }
-command -v systemctl >/dev/null 2>&1 || { echo "Systemd is not installed."; exit 1; }
-command -v jq >/dev/null 2>&1 || { echo "jq is not installed. Please install jq for Telegram testing."; exit 1; }
+# 🎨 Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-function install_project() {
-  echo "Installing kuma-monitoring-reporter project ..."
-
-  if [ -d "$INSTALL_DIR" ]; then
-    echo "Directory already exists: $INSTALL_DIR"
-    echo "Please use 'Update project' (option 3) or remove the directory first."
-    return 1
-  fi
-
-  mkdir -p "$(dirname "$INSTALL_DIR")" || { echo "Failed to create parent directory."; exit 1; }
-
-  echo "Cloning repository from $REPO_URL..."
-  git clone "$REPO_URL" "$INSTALL_DIR" || {
-    echo "Failed to clone repository. Check network or repository URL."
-    exit 1
-  }
-
-  cd "$INSTALL_DIR" || { echo "Failed to change directory to $INSTALL_DIR"; exit 1; }
-  echo "Creating virtual environment..."
-  python3 -m venv venv || { echo "Failed to create virtual environment."; exit 1; }
-  source venv/bin/activate
-  echo "Installing dependencies..."
-  pip install -r requirements.txt || { echo "Failed to install dependencies."; deactivate; exit 1; }
-  deactivate
-
-  echo "Installation completed successfully."
-  echo "First run: source $INSTALL_DIR/venv/bin/activate; python3 report.py"
+# 🛠️ Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
 }
 
-function update_project() {
-  echo "Updating kuma-monitoring-reporter project ..."
-
-  if [ ! -d "$INSTALL_DIR" ]; then
-    echo "Project directory does not exist: $INSTALL_DIR"
-    echo "Please install the project first using option 1."
-    exit 1
-  fi
-
-  cd "$INSTALL_DIR" || { echo "Failed to change directory to $INSTALL_DIR"; exit 1; }
-  echo "Pulling latest changes from repository..."
-  git pull origin main || {
-    echo "Failed to update repository. Check network or repository status."
-    exit 1
-  }
-
-  echo "Updating dependencies..."
-  source venv/bin/activate
-  pip install -r requirements.txt || { echo "Failed to install dependencies."; deactivate; exit 1; }
-  deactivate
-
-  echo "Project updated successfully."
-  echo "Run the project: source $INSTALL_DIR/venv/bin/activate; python3 report.py"
+# 📦 Function to install system dependencies
+install_system_deps() {
+    echo -e "${YELLOW}📦 Installing system dependencies...${NC}"
+    sudo apt-get update
+    sudo apt-get install -y git python3 python3-pip python3-venv jq || {
+        echo -e "${RED}❌ Failed to install system dependencies${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}✅ System dependencies installed${NC}"
 }
 
-function edit_config() {
-  echo "Configuring config.json file..."
+# 🚀 Function to install project
+install_project() {
+    echo -e "${YELLOW}🚀 Installing kuma-monitoring-reporter...${NC}"
+    if [ ! -d "$PROJECT_DIR" ]; then
+        git clone "$REPO_URL" "$PROJECT_DIR" || {
+            echo -e "${RED}❌ Failed to clone repository${NC}"
+            exit 1
+        }
+    fi
+    cd "$PROJECT_DIR" || exit 1
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt || {
+        echo -e "${RED}❌ Failed to install Python dependencies${NC}"
+        exit 1
+    }
+    mkdir -p config logs
+    touch logs/error.log
+    echo -e "${GREEN}✅ Project installed successfully${NC}"
+    echo -e "Run the project: source $VENV_DIR/bin/activate; python3 report.py"
+}
 
-  mkdir -p "$(dirname "$CONFIG_FILE")" || { echo "Failed to create config directory."; exit 1; }
+# ⚙️ Function to configure config.json
+configure_json() {
+    echo -e "${YELLOW}⚙️ Configuring config.json...${NC}"
+    mkdir -p "$PROJECT_DIR/config"
+    read -p "🌐 Enter Uptime Kuma metrics URL (e.g., http://your-server:3001/metrics): " kuma_url
+    read -p "🤖 Enter Telegram bot token: " telegram_bot_token
+    read -p "💬 Enter Telegram chat ID: " telegram_chat_id
+    read -p "🔑 Enter Uptime Kuma API key or password (leave empty if not required): " auth_token
+    read -p "✅ Enter good threshold (ms): " good
+    read -p "⚠️ Enter warning threshold (ms): " warning
+    read -p "🚨 Enter critical threshold (ms): " critical
+    read -p "⏰ Enter report interval (minutes): " report_interval
 
-  read -p "Kuma Metrics URL (e.g. http://localhost:3001/metrics): " kuma_url
-  read -p "Telegram bot token: " telegram_bot_token
-  read -p "Telegram chat ID (e.g. 123456789): " telegram_chat_id
-  read -p "API token for Kuma (leave empty if not needed): " auth_token
-  read -p "Good threshold (ms, e.g. 200): " good
-  read -p "Warning threshold (ms, e.g. 500): " warning
-  read -p "Critical threshold (ms, e.g. 1000): " critical
-  read -p "Report interval (minutes, e.g. 1 for every minute): " report_interval
-
-  if ! [[ "$report_interval" =~ ^[0-9]+$ ]] || [ "$report_interval" -lt 1 ]; then
-    echo "Report interval must be a positive integer."
-    exit 1
-  fi
-
-  cat > "$CONFIG_FILE" <<EOF
+    cat > "$CONFIG_FILE" <<EOF
 {
-  "kuma_url": "$kuma_url",
-  "telegram_bot_token": "$telegram_bot_token",
-  "telegram_chat_id": "$telegram_chat_id",
-  "auth_token": "$auth_token",
-  "thresholds": {
-    "good": $good,
-    "warning": $warning,
-    "critical": $critical
-  },
-  "report_interval": $report_interval
+    "kuma_url": "$kuma_url",
+    "telegram_bot_token": "$telegram_bot_token",
+    "telegram_chat_id": "$telegram_chat_id",
+    "auth_token": "$auth_token",
+    "thresholds": {
+        "good": $good,
+        "warning": $warning,
+        "critical": $critical
+    },
+    "report_interval": $report_interval
 }
 EOF
-
-  echo "Configuration saved successfully: $CONFIG_FILE"
+    echo -e "${GREEN}✅ Config file created at $CONFIG_FILE${NC}"
 }
 
-function setup_systemd() {
-  echo "Setting up systemd service for kuma-monitoring-reporter ..."
+# 🔄 Function to update project
+update_project() {
+    echo -e "${YELLOW}🔄 Updating kuma-monitoring-reporter...${NC}"
+    cd "$PROJECT_DIR" || {
+        echo -e "${RED}❌ Project directory not found${NC}"
+        exit 1
+    }
+    git pull origin main || {
+        echo -e "${RED}❌ Failed to pull latest changes${NC}"
+        exit 1
+    }
+    source venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt || {
+        echo -e "${RED}❌ Failed to update Python dependencies${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}✅ Project updated successfully${NC}"
+    echo -e "Run the project: source $VENV_DIR/bin/activate; python3 report.py"
+}
 
-  if [ -f "$SYSTEMD_SERVICE" ]; then
-    echo "Systemd service already exists: $SYSTEMD_SERVICE"
-    read -p "Do you want to overwrite it? (y/n): " overwrite
-    if [[ "$overwrite" != "y" ]]; then
-      echo "Operation canceled."
-      return 1
-    fi
-  fi
-
-  cat > "$SYSTEMD_SERVICE" <<EOF
+# 🛠️ Function to setup systemd service
+setup_service() {
+    echo -e "${YELLOW}🛠️ Setting up systemd service...${NC}"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${RED}❌ Config file not found. Please configure it first.${NC}"
+        exit 1
+    }
+    sudo bash -c "cat > $SERVICE_FILE" <<EOF
 [Unit]
 Description=Kuma Monitoring Reporter Service
 After=network.target
 
 [Service]
-User=root
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/venv/bin/python3 $INSTALL_DIR/report.py
+ExecStart=$VENV_DIR/bin/python3 $PROJECT_DIR/report.py
+WorkingDirectory=$PROJECT_DIR
 Restart=always
+User=$USER
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-  systemctl daemon-reload || { echo "Failed to reload systemd daemon."; exit 1; }
-  systemctl enable kuma-reporter.service || { echo "Failed to enable systemd service."; exit 1; }
-  systemctl start kuma-reporter.service || { echo "Failed to start systemd service."; exit 1; }
-
-  echo "Systemd service setup successfully."
-  echo "Check status: systemctl status kuma-reporter.service"
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$SERVICE_NAME"
+    sudo systemctl start "$SERVICE_NAME"
+    echo -e "${GREEN}✅ Systemd service setup and started${NC}"
+    sudo systemctl status "$SERVICE_NAME" --no-pager
 }
 
-function stop_bot() {
-  echo "Stopping kuma-monitoring-reporter bot ..."
-
-  if [ -f "$SYSTEMD_SERVICE" ]; then
-    systemctl stop kuma-reporter.service 2>/dev/null && echo "Systemd service stopped."
-    read -p "Do you want to disable the service? (y/n): " disable
-    if [[ "$disable" == "y" ]]; then
-      systemctl disable kuma-reporter.service 2>/dev/null && echo "Systemd service disabled."
-    fi
-  else
-    echo "No systemd service found. Checking for running processes ..."
-    pids=$(pgrep -f "python3 $INSTALL_DIR/report.py")
-    if [ -n "$pids" ]; then
-      echo "Found running bot processes (PIDs: $pids)."
-      read -p "Do you want to terminate them? (y/n): " confirm
-      if [[ "$confirm" == "y" ]]; then
-        kill $pids && echo "Bot processes terminated."
-      else
-        echo "Operation canceled."
-      fi
+# 🛑 Function to stop bot
+stop_bot() {
+    echo -e "${YELLOW}🛑 Stopping bot...${NC}"
+    if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+        sudo systemctl stop "$SERVICE_NAME"
+        echo -e "${GREEN}✅ Bot stopped${NC}"
     else
-      echo "No running bot processes found."
+        echo -e "${RED}❌ Bot is not running${NC}"
     fi
-  fi
-
-  echo "Bot stop operation completed."
 }
 
-function test_telegram() {
-  echo "Testing Telegram configuration ..."
-
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Config file not found: $CONFIG_FILE"
-    echo "Please configure the project first using option 2."
-    exit 1
-  fi
-
-  telegram_bot_token=$(jq -r '.telegram_bot_token' "$CONFIG_FILE")
-  telegram_chat_id=$(jq -r '.telegram_chat_id' "$CONFIG_FILE")
-
-  if [ -z "$telegram_bot_token" ] || [ -z "$telegram_chat_id" ]; then
-    echo "Invalid Telegram configuration in $CONFIG_FILE"
-    exit 1
-  fi
-
-  curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
-    -d "chat_id=$telegram_chat_id" \
-    -d "text=Test message from kuma-monitoring-reporter" >/dev/null
-
-  if [ $? -eq 0 ]; then
-    echo "Test message sent successfully to Telegram."
-  else
-    echo "Failed to send test message. Check Telegram bot token and chat ID."
-  fi
-}
-
-function backup_logs() {
-  echo "Backing up logs ..."
-
-  if [ ! -f "$LOG_FILE" ]; then
-    echo "No log file found: $LOG_FILE"
-    return 1
-  fi
-
-  mkdir -p "$BACKUP_DIR" || { echo "Failed to create backup directory."; exit 1; }
-  timestamp=$(date +%Y%m%d_%H%M%S)
-  backup_file="$BACKUP_DIR/logs_$timestamp.tar.gz"
-
-  tar -czf "$backup_file" "$LOG_FILE" || { echo "Failed to create backup."; exit 1; }
-  echo "Logs backed up successfully to $backup_file."
-}
-
-function show_status() {
-  echo "Project status for kuma-monitoring-reporter ..."
-
-  echo "Directory: $INSTALL_DIR"
-  if [ -d "$INSTALL_DIR" ]; then
-    cd "$INSTALL_DIR" || { echo "Failed to access directory."; exit 1; }
-    echo "Git version: $(git rev-parse --short HEAD 2>/dev/null || echo 'Not a git repository')"
-  else
-    echo "Project not installed."
-  fi
-
-  echo "Config file: $CONFIG_FILE"
-  if [ -f "$CONFIG_FILE" ]; then
-    echo "Configuration:"
-    jq '.' "$CONFIG_FILE"
-  else
-    echo "Config file not found."
-  fi
-
-  echo "Systemd service: $SYSTEMD_SERVICE"
-  if [ -f "$SYSTEMD_SERVICE" ]; then
-    systemctl status kuma-reporter.service --no-pager
-  else
-    echo "Systemd service not setup."
-  fi
-
-  echo "Running processes:"
-  pgrep -f "python3 $INSTALL_DIR/report.py" && echo "Bot is running." || echo "No bot processes found."
-}
-
-function restart_service() {
-  echo "Restarting kuma-monitoring-reporter service ..."
-
-  if [ -f "$SYSTEMD_SERVICE" ]; then
-    systemctl restart kuma-reporter.service || { echo "Failed to restart systemd service."; exit 1; }
-    echo "Systemd service restarted successfully."
-    echo "Check status: systemctl status kuma-reporter.service"
-  else
-    echo "No systemd service found. Please setup the service using option 4."
-  fi
-}
-
-function check_dependencies() {
-  echo "Checking dependencies ..."
-
-  if [ ! -d "$INSTALL_DIR" ]; then
-    echo "Project directory does not exist: $INSTALL_DIR"
-    exit 1
-  fi
-
-  cd "$INSTALL_DIR" || { echo "Failed to change directory to $INSTALL_DIR"; exit 1; }
-  source venv/bin/activate
-  pip install -r requirements.txt || { echo "Failed to install dependencies."; deactivate; exit 1; }
-  deactivate
-
-  echo "All dependencies are installed."
-}
-
-function uninstall_project() {
-  echo "This will delete the entire project!"
-  read -p "Do you want to keep config.json? (y/n): " keep_config
-  read -p "Are you sure you want to delete the project? (y/n): " confirm
-
-  if [[ "$confirm" == "y" ]]; then
-    if [[ "$keep_config" == "y" ]]; then
-      mkdir -p "$BACKUP_DIR"
-      cp "$CONFIG_FILE" "$BACKUP_DIR/config.json" 2>/dev/null && echo "config.json backed up to $BACKUP_DIR/config.json"
-      rm -rf "$INSTALL_DIR"
-      echo "Project deleted, config.json preserved in $BACKUP_DIR/config.json."
+# 🔄 Function to restart bot
+restart_bot() {
+    echo -e "${YELLOW}🔄 Restarting bot...${NC}"
+    if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+        sudo systemctl restart "$SERVICE_NAME"
+        echo -e "${GREEN}✅ Bot restarted${NC}"
+        sudo systemctl status "$SERVICE_NAME" --no-pager
     else
-      rm -rf "$INSTALL_DIR"
-      echo "Project and config.json deleted."
+        echo -e "${RED}❌ Bot is not running${NC}"
     fi
-
-    if [ -f "$SYSTEMD_SERVICE" ]; then
-      systemctl stop kuma-reporter.service 2>/dev/null
-      systemctl disable kuma-reporter.service 2>/dev/null
-      rm -f "$SYSTEMD_SERVICE"
-      systemctl daemon-reload
-      echo "Systemd service removed."
-    fi
-  else
-    echo "Operation canceled."
-  fi
 }
 
-function menu() {
-  clear
-  echo "Automatic installer for kuma-monitoring-reporter"
-  echo "-------------------------------------------"
-  echo "1. Install project"
-  echo "2. Configure config.json file"
-  echo "3. Update project"
-  echo "4. Setup systemd service"
-  echo "5. Stop bot"
-  echo "6. Test Telegram configuration"
-  echo "7. Backup logs"
-  echo "8. Show project status"
-  echo "9. Restart systemd service"
-  echo "10. Check dependencies"
-  echo "11. Completely remove project"
-  echo "0. Exit"
-  echo "-------------------------------------"
-
-  read -p "Choose an option: " choice
-
-  case $choice in
-    1) install_project ;;
-    2) edit_config ;;
-    3) update_project ;;
-    4) setup_systemd ;;
-    5) stop_bot ;;
-    6) test_telegram ;;
-    7) backup_logs ;;
-    8) show_status ;;
-    9) restart_service ;;
-    10) check_dependencies ;;
-    11) uninstall_project ;;
-    0) echo "Bye!"; exit 0 ;;
-    *) echo "Invalid option"; sleep 2; menu ;;
-  esac
+# 📬 Function to test Telegram configuration
+test_telegram() {
+    echo -e "${YELLOW}📬 Testing Telegram configuration...${NC}"
+    source "$VENV_DIR/bin/activate"
+    python3 -c "
+import json
+import requests
+with open('$CONFIG_FILE') as f:
+    config = json.load(f)
+url = f'https://api.telegram.org/bot{config[\"telegram_bot_token\"]}/sendMessage'
+data = {'chat_id': config['telegram_chat_id'], 'text': 'Test message from kuma-monitoring-reporter'}
+response = requests.post(url, data=data)
+if response.status_code == 200:
+    print('\033[0;32m✅ Test message sent successfully.\033[0m')
+else:
+    print(f'\033[0;31m❌ Failed to send test message: {response.text}\033[0m')
+"
 }
 
-menu
+# 💾 Function to backup logs
+backup_logs() {
+    echo -e "${YELLOW}💾 Backing up logs...${NC}"
+    backup_dir="$PROJECT_DIR/logs/backup-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$backup_dir"
+    cp -r "$PROJECT_DIR/logs/"*.log "$backup_dir" 2>/dev/null || {
+        echo -e "${RED}❌ No logs found to backup${NC}"
+    }
+    echo -e "${GREEN}✅ Logs backed up to $backup_dir${NC}"
+}
+
+# 📊 Function to show project status
+show_status() {
+    echo -e "${YELLOW}📊 Checking project status...${NC}"
+    if [ -d "$PROJECT_DIR" ]; then
+        echo -e "${GREEN}✅ Project directory: $PROJECT_DIR${NC}"
+        if [ -f "$CONFIG_FILE" ]; then
+            echo -e "${GREEN}✅ Config file exists: $CONFIG_FILE${NC}"
+        else
+            echo -e "${RED}❌ Config file missing: $CONFIG_FILE${NC}"
+        fi
+        if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+            echo -e "${GREEN}✅ Service $SERVICE_NAME is running${NC}"
+            sudo systemctl status "$SERVICE_NAME" --no-pager
+        else
+            echo -e "${RED}❌ Service $SERVICE_NAME is not running${NC}"
+        fi
+    else
+        echo -e "${RED}❌ Project directory not found: $PROJECT_DIR${NC}"
+    fi
+}
+
+# 🔍 Function to check dependencies
+check_deps() {
+    echo -e "${YELLOW}🔍 Checking dependencies...${NC}"
+    for cmd in git python3 pip jq; do
+        if command_exists "$cmd"; then
+            echo -e "${GREEN}✅ $cmd is installed${NC}"
+        else
+            echo -e "${RED}❌ $cmd is not installed${NC}"
+        fi
+    done
+    if [ -d "$VENV_DIR" ]; then
+        source "$VENV_DIR/bin/activate"
+        pip list
+    else
+        echo -e "${RED}❌ Virtual environment not found: $VENV_DIR${NC}"
+    fi
+}
+
+# 🗑️ Function to remove project
+remove_project() {
+    echo -e "${YELLOW}🗑️ Removing kuma-monitoring-reporter...${NC}"
+    if [ -d "$PROJECT_DIR" ]; then
+        stop_bot
+        sudo rm -f "$SERVICE_FILE"
+        sudo systemctl daemon-reload
+        rm -rf "$PROJECT_DIR"
+        echo -e "${GREEN}✅ Project removed successfully${NC}"
+    else
+        echo -e "${RED}❌ Project directory not found: $PROJECT_DIR${NC}"
+    fi
+}
+
+# 🚀 Service Management Submenu
+service_management() {
+    while true; do
+        echo -e "\n🌟 Service Management Menu"
+        echo "-------------------------------------"
+        echo "1. Stop bot 🛑"
+        echo "2. Restart bot 🔄"
+        echo "3. Show service status 📊"
+        echo "4. Setup systemd service 🛠️"
+        echo "0. Back to main menu ⬅️"
+        echo "-------------------------------------"
+        read -p "Choose an option: " sub_choice
+        case $sub_choice in
+            1) stop_bot ;;
+            2) restart_bot ;;
+            3) show_status ;;
+            4) setup_service ;;
+            0) break ;;
+            *) echo -e "${RED}❌ Invalid option${NC}" ;;
+        esac
+    done
+}
+
+# 📋 Main Menu
+while true; do
+    echo -e "\n🌟 kuma-monitoring-reporter Installer"
+    echo "-------------------------------------"
+    echo "1. Install project 🚀"
+    echo "2. Configure config.json ⚙️"
+    echo "3. Update project 🔄"
+    echo "4. Service management 🛠️"
+    echo "5. Test Telegram configuration 📬"
+    echo "6. Backup logs 💾"
+    echo "7. Check dependencies 🔍"
+    echo "8. Completely remove project 🗑️"
+    echo "0. Exit ⬅️"
+    echo "-------------------------------------"
+    read -p "Choose an option: " choice
+
+    case $choice in
+        1) install_system_deps; install_project ;;
+        2) configure_json ;;
+        3) update_project ;;
+        4) service_management ;;
+        5) test_telegram ;;
+        6) backup_logs ;;
+        7) check_deps ;;
+        8) remove_project ;;
+        0) echo -e "${YELLOW}⬅️ Exiting...${NC}"; exit 0 ;;
+        *) echo -e "${RED}❌ Invalid option${NC}" ;;
+    esac
+done

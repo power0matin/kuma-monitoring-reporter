@@ -8,13 +8,11 @@ def setup_logging():
     log_dir = "logs"
     log_file = os.path.join(log_dir, "error.log")
 
-    # Create logs directory if it doesn't exist
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    # Create error.log file if it doesn't exist
     if not os.path.exists(log_file):
-        open(log_file, "a").close()  # Create empty file
+        open(log_file, "a").close()
 
     logging.basicConfig(
         filename=log_file,
@@ -25,7 +23,7 @@ def setup_logging():
 
 def fetch_metrics(config):
     """Fetch and parse metrics from Uptime Kuma's /metrics endpoint."""
-    setup_logging()  # Set up logging
+    setup_logging()
     kuma_url = config["kuma_url"]
     auth_token = config.get("auth_token")
 
@@ -58,7 +56,9 @@ def fetch_metrics(config):
                 if monitor_name not in parsed_metrics:
                     parsed_metrics[monitor_name] = {
                         "name": monitor_name,
-                        "type": "unknown",
+                        "type": labels.get(
+                            "monitor_type", "unknown"
+                        ),  # Get type from any monitor metric
                         "status": "UNKNOWN",
                         "response_ms": 0,
                     }
@@ -75,10 +75,6 @@ def fetch_metrics(config):
                     )
                 elif metric_name == "monitor_response_time":
                     parsed_metrics[monitor_name]["response_ms"] = value
-                elif metric_name == "monitor_info":
-                    parsed_metrics[monitor_name]["type"] = labels.get(
-                        "monitor_type", "unknown"
-                    )
 
         parsed_metrics = list(parsed_metrics.values())
         logging.debug(f"Fetched metrics: {parsed_metrics}")
