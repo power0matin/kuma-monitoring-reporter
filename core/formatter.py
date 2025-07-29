@@ -1,6 +1,6 @@
 from datetime import datetime
 
-last_statuses = {}  # برای ذخیره وضعیت قبلی مانیتورها
+last_statuses = {}
 
 
 def format_message(metrics, thresholds):
@@ -24,6 +24,11 @@ def format_message(metrics, thresholds):
         monitor_type = metric["type"]
         status = metric["status"]
         response_ms = metric["response_ms"]
+        # Round response_ms to match desired output
+        if response_ms < 1:
+            response_ms = 0.0  # Round very small values to 0.0
+        else:
+            response_ms = round(response_ms, 1)  # Round to 1 decimal place
         current_state = (status, response_ms)
 
         if name not in last_statuses or last_statuses[name] != current_state:
@@ -44,7 +49,11 @@ def format_message(metrics, thresholds):
             msg_lines.append(line)
 
     last_statuses = {
-        metric["name"]: (metric["status"], metric["response_ms"]) for metric in metrics
+        metric["name"]: (
+            metric["status"],
+            round(metric["response_ms"], 1) if metric["response_ms"] >= 1 else 0.0,
+        )
+        for metric in metrics
     }
 
     if not changed:

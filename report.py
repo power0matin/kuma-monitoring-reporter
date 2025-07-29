@@ -27,7 +27,7 @@ def load_config():
 def main():
     """Main function to fetch, format, and send reports."""
     config = load_config()
-    metrics = fetch_metrics(config["kuma_url"], config.get("auth_token"))
+    metrics = fetch_metrics(config)  # Pass the entire config dictionary
     if metrics:
         message = format_message(metrics, config["thresholds"])
         if message:
@@ -35,6 +35,10 @@ def main():
                 logging.info("Report sent successfully.")
             else:
                 logging.error("Failed to send report.")
+        else:
+            logging.debug("No changes in metrics, no report sent.")
+    else:
+        logging.warning("No metrics fetched, skipping report.")
 
 
 if __name__ == "__main__":

@@ -8,41 +8,66 @@ logging.basicConfig(
 )
 
 
-def fetch_metrics(kuma_url, auth_token=None):
+def fetch_metrics(config):
     """Fetch and parse metrics from Uptime Kuma's /metrics endpoint."""
+    kuma_url = config["kuma_url"]
+    auth_token = config.get("auth_token")
+
     try:
-        headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
-        response = requests.get(kuma_url, headers=headers, timeout=10)
+        auth = ("", auth_token) if auth_token else None
+        response = requests.get(kuma_url, auth=auth, timeout=10)
         response.raise_for_status()
+
         metrics = response.text.splitlines()
-        parsed_metrics = []
+        parsed_metrics = {}
+
         for line in metrics:
-            if line.startswith("uptimekuma_monitor"):
-                if "monitor_name" in line:
-                    name = line.split('monitor_name="')[1].split('"')[0]
-                    if "monitor_type" in line:
-                        monitor_type = line.split('monitor_type="')[1].split('"')[0]
-                        parsed_metrics.append(
-                            {
-                                "name": name,
-                                "type": monitor_type,
-                                "status": "UP",
-                                "response_ms": 0,
-                            }
+            if line.startswith("#") or not line:
+                continue
+            if "monitor_" in line:
+                parts = line.split("{")
+                metric_name = parts[0]
+                labels_str = parts[1].split("}")[0]
+                value = float(parts[1].split("} ")[1])
+
+                labels = {}
+                for label in labels_str.split(","):
+                    key, val = label.split("=")
+                    labels[key.strip()] = val.strip('"')
+
+                monitor_name = labels.get("monitor_name")
+                if not monitor_name:
+                    continue
+
+                if monitor_name not in parsed_metrics:
+                    parsed_metrics[monitor_name] = {
+                        "name": monitor_name,
+                        "type": "unknown",
+                        "status": "UNKNOWN",
+                        "response_ms": 0,
+                    }
+
+                if metric_name == "monitor_status":
+                    parsed_metrics[monitor_name]["status"] = (
+                        "UP"
+                        if value == 1
+                        else (
+                            "DOWN"
+                            if value == 0
+                            else "PENDING" if value == 2 else "MAINTENANCE"
                         )
-                    elif "response_ms" in line:
-                        response_ms = float(line.split("} ")[1])
-                        for metric in parsed_metrics:
-                            if metric["name"] == name:
-                                metric["response_ms"] = response_ms
-                    elif "monitor_status" in line:
-                        status_value = int(float(line.split("} ")[1]))
-                        status = "UP" if status_value == 1 else "DOWN"
-                        for metric in parsed_metrics:
-                            if metric["name"] == name:
-                                metric["status"] = status
+                    )
+                elif metric_name == "monitor_response_time":
+                    parsed_metrics[monitor_name]["response_ms"] = value
+                elif metric_name == "monitor_info":
+                    parsed_metrics[monitor_name]["type"] = labels.get(
+                        "monitor_type", "unknown"
+                    )
+
+        parsed_metrics = list(parsed_metrics.values())
         logging.debug(f"Fetched metrics: {parsed_metrics}")
         return parsed_metrics
+
     except requests.RequestException as e:
         logging.error(f"Failed to fetch metrics from {kuma_url}: {str(e)}")
         return None
