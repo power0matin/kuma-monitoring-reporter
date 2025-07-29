@@ -73,15 +73,15 @@ function edit_config() {
 
   mkdir -p "$(dirname "$CONFIG_FILE")" || { echo "Failed to create config directory."; exit 1; }
 
-  read -p "Kuma Metrics URL (e.g. http://localhost:3001/metrics): " kuma_url
-  read -p "Telegram bot token: " telegram_bot_token
-  read -p "Telegram chat ID (e.g. 123456789): " telegram_chat_id
-  read -p "API token for Kuma (leave empty if not needed): " auth_token
-  read -p "Good threshold (ms, e.g. 200): " good
-  read -p "Warning threshold (ms, e.g. 500): " warning
-  read -p "Critical threshold (ms, e.g. 1000): " critical
-  read -p "Report interval (minutes, e.g. 1 for every minute): " report_interval
-  read -p "Notification mode (sound/silent): " notification_mode
+  read -p "🌐 Kuma Metrics URL (e.g. http://localhost:3001/metrics): " kuma_url
+  read -p "🤖 Telegram bot token: " telegram_bot_token
+  read -p "💬 Telegram chat ID (e.g. 123456789): " telegram_chat_id
+  read -p "🔑 API token for Kuma (leave empty if not needed): " auth_token
+  read -p "🟢 Good threshold (ms, e.g. 200): " good
+  read -p "🟡 Warning threshold (ms, e.g. 500): " warning
+  read -p "🔴 Critical threshold (ms, e.g. 1000): " critical
+  read -p "⏰ Report interval (minutes, e.g. 1 for every minute): " report_interval
+  read -p "🔔 Notification mode (sound/silent): " notification_mode
 
   if ! [[ "$report_interval" =~ ^[0-9]+$ ]] || [ "$report_interval" -lt 1 ]; then
     echo "Report interval must be a positive integer."
@@ -184,23 +184,19 @@ function test_telegram() {
     exit 1
   fi
 
-  telegram_bot_token=$(jq -r '.telegram_bot_token' "$CONFIG_FILE")
-  telegram_chat_id=$(jq -r '.telegram_chat_id' "$CONFIG_FILE")
+  cd "$INSTALL_DIR" || { echo "Failed to change directory to $INSTALL_DIR"; exit 1; }
+  source venv/bin/activate
 
-  if [ -z "$telegram_bot_token" ] || [ -z "$telegram_chat_id" ]; then
-    echo "Invalid Telegram configuration in $CONFIG_FILE"
-    exit 1
-  fi
+  python3 - <<EOF
+from core.telegram import test_telegram_notification
+result = test_telegram_notification()
+if result['status'] == 'success':
+    print(f"Test message sent successfully. Silent mode: {result['silent']}")
+else:
+    print(f"Failed to send test message: {result['error']}")
+EOF
 
-  curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
-    -d "chat_id=$telegram_chat_id" \
-    -d "text=Test message from kuma-monitoring-reporter" >/dev/null
-
-  if [ $? -eq 0 ]; then
-    echo "Test message sent successfully to Telegram."
-  else
-    echo "Failed to send test message. Check Telegram bot token and chat ID."
-  fi
+  deactivate
 }
 
 function backup_logs() {
