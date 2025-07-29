@@ -6,16 +6,8 @@ last_statuses = {}  # برای ذخیره وضعیت قبلی مانیتورها
 def format_message(metrics, thresholds):
     """Format metrics into a Telegram message."""
     global last_statuses
-    response_times = metrics.get("monitor_response_time", [])
-    statuses = {
-        labels["monitor_name"]: value
-        for labels, value in metrics.get("monitor_status", [])
-    }
-    messages = metrics.get("monitor_msg", [])
-    monitor_types = {
-        labels["monitor_name"]: labels.get("monitor_type", "Unknown")
-        for labels, _ in response_times
-    }
+    if not metrics:
+        return None
 
     msg_lines = [
         "📊 *Uptime Kuma Status Report*",
@@ -27,53 +19,37 @@ def format_message(metrics, thresholds):
     up_count = 0
     down_count = 0
 
-    for labels, response_time in response_times:
-        name = labels.get("monitor_name", "Unknown")
-        monitor_type = monitor_types.get(name, "Unknown")
-        status = statuses.get(name, 0)
-        error_msg = next(
-            (m[1] for m in messages if m[0].get("monitor_name") == name), None
-        )
-        current_state = (status, response_time, error_msg)
+    for metric in metrics:
+        name = metric["name"]
+        monitor_type = metric["type"]
+        status = metric["status"]
+        response_ms = metric["response_ms"]
+        current_state = (status, response_ms)
 
         if name not in last_statuses or last_statuses[name] != current_state:
             changed = True
-            if status == 0:
+            if status == "DOWN":
                 emoji = "🔴"
                 down_count += 1
                 line = f"{emoji} *{name}* ({monitor_type}) is *DOWN*"
-                if error_msg:
-                    line += f" — Reason: `{error_msg}`"
             else:
                 up_count += 1
-                if response_time < thresholds["good"]:
+                if response_ms < thresholds["good"]:
                     emoji = "🟢"
-                elif response_time < thresholds["warning"]:
+                elif response_ms < thresholds["warning"]:
                     emoji = "🟡"
                 else:
                     emoji = "🔴"
-                line = f"{emoji} *{name}* ({monitor_type}) — `{response_time:.1f} ms`"
+                line = f"{emoji} *{name}* ({monitor_type}) — `{response_ms:.1f} ms`"
             msg_lines.append(line)
 
     last_statuses = {
-        labels["monitor_name"]: (
-            statuses.get(labels["monitor_name"], 0),
-            response_time,
-            next(
-                (
-                    m[1]
-                    for m in messages
-                    if m[0].get("monitor_name") == labels["monitor_name"]
-                ),
-                None,
-            ),
-        )
-        for labels, response_time in response_times
+        metric["name"]: (metric["status"], metric["response_ms"]) for metric in metrics
     }
-
-    msg_lines.append("════════════════════════════")
-    msg_lines.append(f"📈 *Summary*: {up_count} UP, {down_count} DOWN")
 
     if not changed:
         return None
+
+    msg_lines.append("════════════════════════════")
+    msg_lines.append(f"📈 *Summary*: {up_count} UP, {down_count} DOWN")
     return "\n".join(msg_lines)
