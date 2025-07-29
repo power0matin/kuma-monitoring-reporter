@@ -59,14 +59,14 @@ install_project() {
 configure_json() {
     echo -e "${YELLOW}⚙️ Configuring config.json...${NC}"
     mkdir -p "$PROJECT_DIR/config"
-    read -p "🌐 Enter Uptime Kuma metrics URL (e.g., http://your-server:3001/metrics): " kuma_url
+    read -p "🌐 Enter Uptime Kuma metrics URL (e.g., http://localhost:3001/metrics): " kuma_url
     read -p "🤖 Enter Telegram bot token: " telegram_bot_token
     read -p "💬 Enter Telegram chat ID: " telegram_chat_id
-    read -p "🔑 Enter Uptime Kuma API key or password (leave empty if not required): " auth_token
-    read -p "✅ Enter good threshold (ms): " good
-    read -p "⚠️ Enter warning threshold (ms): " warning
-    read -p "🚨 Enter critical threshold (ms): " critical
-    read -p "⏰ Enter report interval (minutes): " report_interval
+    read -p "🔑 Enter Uptime Kuma API key or password: " auth_token
+    read -p "✅ Enter good threshold (ms, e.g. 100): " good
+    read -p "⚠️ Enter warning threshold (ms, e.g. 250): " warning
+    read -p "🚨 Enter critical threshold (ms, e.g. 500): " critical
+    read -p "⏰ Enter report interval (minutes, e.g. 1 for every minute): " report_interval
 
     cat > "$CONFIG_FILE" <<EOF
 {
