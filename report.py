@@ -1,48 +1,69 @@
-import schedule
-import time
+import json
 import logging
-from core.fetch import fetch_metrics
-from core.formatter import format_report
-from core.telegram import send_message, load_config
+import time
+import schedule
+import os
 
-# Setup logging
+from core.fetcher import fetch_metrics
+from core.parser import parse_prometheus_metrics
+from core.formatter import format_message
+from notifier.telegram import send_telegram_message
+
+# ایجاد پوشه logs اگه وجود نداشته باشه
+os.makedirs("logs", exist_ok=True)
+
 logging.basicConfig(
     filename="logs/error.log",
-    level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 
+def load_config():
+    logging.info("Loading config file...")
+    with open("config/config.json") as f:
+        config = json.load(f)
+        logging.info("Config loaded successfully")
+        return config
+
+
 def main():
+    config = load_config()
+    logging.info("Starting main job...")
     try:
-        config = load_config()
-        logging.debug(f"Config loaded: {config}")
-        metrics = fetch_metrics(config["kuma_url"], config.get("auth_token"))
-        logging.debug(f"Metrics fetched: {metrics}")
-        report = format_report(metrics, config["thresholds"])
-        logging.debug(f"Report formatted: {report}")
-        success = send_message(report, silent=True)  # Send messages silently
-        if success:
-            logging.info("Report sent successfully to Telegram")
-        else:
-            logging.error("Failed to send report to Telegram")
+        raw_metrics = fetch_metrics(config["kuma_url"], config["auth_token"])
+        logging.info(f"Fetched raw metrics: {raw_metrics[:100]}...")
+        metrics = parse_prometheus_metrics(raw_metrics)
+        logging.info(f"Parsed metrics: {metrics}")
+        message = format_message(metrics, config["thresholds"])
+        logging.info(f"Formatted message: {message}")
+        send_telegram_message(
+            config["telegram_bot_token"], config["telegram_chat_id"], message
+        )
+        logging.info("Message sent successfully")
     except Exception as e:
-        logging.error(f"Error in main loop: {str(e)}", exc_info=True)
+        logging.error(f"Error in main: {e}")
+        send_telegram_message(
+            config["telegram_bot_token"],
+            config["telegram_chat_id"],
+            f"❌ Error occurred: {str(e)}",
+        )
+        print(f"[!] Error: {e}")
 
 
-def run():
-    try:
-        config = load_config()
-        schedule.every(config["report_interval"]).minutes.do(main)
-        logging.info("Starting Kuma Monitoring Reporter")
-        main()  # Run immediately for testing
-        while True:
-            schedule.run_pending()
-            time.sleep(60)
-    except Exception as e:
-        logging.error(f"Error in run loop: {str(e)}", exc_info=True)
-        raise
+def job():
+    main()
 
 
 if __name__ == "__main__":
-    run()
+    logging.info("Starting script...")
+    config = load_config()
+    job()  # اجرای فوری برای تست
+    schedule.every(config["report_interval"]).minutes.do(
+        job
+    )  # استفاده از report_interval
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

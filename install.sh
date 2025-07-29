@@ -187,11 +187,10 @@ function test_telegram() {
 
   curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
     -d "chat_id=$telegram_chat_id" \
-    -d "text=Test message from kuma-monitoring-reporter" \
-    -d "disable_notification=true" >/dev/null
+    -d "text=Test message from kuma-monitoring-reporter" >/dev/null
 
   if [ $? -eq 0 ]; then
-    echo "Test message sent successfully to Telegram (silent)."
+    echo "Test message sent successfully to Telegram."
   else
     echo "Failed to send test message. Check Telegram bot token and chat ID."
   fi
@@ -200,16 +199,17 @@ function test_telegram() {
 function backup_logs() {
   echo "Backing up logs ..."
 
-  if [ -f "$LOG_FILE" ]; then
-    mkdir -p "$BACKUP_DIR" || { echo "Failed to create backup directory."; exit 1; }
-    timestamp=$(date +%Y%m%d_%H%M%S)
-    backup_file="$BACKUP_DIR/logs_$timestamp.tar.gz"
-
-    tar -czf "$backup_file" "$LOG_FILE" || { echo "Failed to create backup."; exit 1; }
-    echo "Logs backed up successfully to $backup_file."
-  else
+  if [ ! -f "$LOG_FILE" ]; then
     echo "No log file found: $LOG_FILE"
+    return 1
   fi
+
+  mkdir -p "$BACKUP_DIR" || { echo "Failed to create backup directory."; exit 1; }
+  timestamp=$(date +%Y%m%d_%H%M%S)
+  backup_file="$BACKUP_DIR/logs_$timestamp.tar.gz"
+
+  tar -czf "$backup_file" "$LOG_FILE" || { echo "Failed to create backup."; exit 1; }
+  echo "Logs backed up successfully to $backup_file."
 }
 
 function show_status() {
