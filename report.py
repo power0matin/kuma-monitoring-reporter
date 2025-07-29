@@ -13,13 +13,11 @@ def setup_logging():
     log_dir = "logs"
     log_file = os.path.join(log_dir, "error.log")
 
-    # Create logs directory if it doesn't exist
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    # Create error.log file if it doesn't exist
     if not os.path.exists(log_file):
-        open(log_file, "a").close()  # Create empty file
+        open(log_file, "a").close()
 
     logging.basicConfig(
         filename=log_file,
@@ -56,13 +54,13 @@ def main():
 
 
 if __name__ == "__main__":
-    setup_logging()  # Set up logging before anything else
+    setup_logging()
     config = load_config()
     schedule.every(config["report_interval"]).minutes.do(main)
     logging.info(
         f"Bot started. Reports will be sent every {config['report_interval']} minute(s)."
     )
-    main()  # Run once immediately
+    main()
     while True:
         schedule.run_pending()
         time.sleep(1)

@@ -56,9 +56,7 @@ def fetch_metrics(config):
                 if monitor_name not in parsed_metrics:
                     parsed_metrics[monitor_name] = {
                         "name": monitor_name,
-                        "type": labels.get(
-                            "monitor_type", "unknown"
-                        ),  # Get type from any monitor metric
+                        "type": labels.get("monitor_type", "unknown"),
                         "status": "UNKNOWN",
                         "response_ms": 0,
                     }
