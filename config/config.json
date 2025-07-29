@@ -8,5 +8,6 @@
     "warning": 500,
     "critical": 1000
   },
-  "report_interval": 1
+  "report_interval": 1,
+  "notification_mode": "sound"
 }
