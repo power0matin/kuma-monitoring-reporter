@@ -84,7 +84,7 @@ function edit_config() {
   if ! [[ "$report_interval" =~ ^[0-9]+$ ]] || [ "$report_interval" -lt 1 ]; then
     echo "❌ Report interval must be a positive integer."
     exit 1
-  }
+  fi
 
   cat > "$CONFIG_FILE" <<EOF
 {
