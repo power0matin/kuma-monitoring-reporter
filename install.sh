@@ -22,6 +22,12 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# 📁 Function to setup directories and log files
+setup_dirs() {
+    mkdir -p "$PROJECT_DIR/logs" "$PROJECT_DIR/config"
+    touch "$PROJECT_DIR/logs/install.log" "$PROJECT_DIR/logs/error.log"
+}
+
 # 📈 Simple progress bar
 progress_bar() {
     local duration=$1
@@ -40,6 +46,7 @@ progress_bar() {
 
 # 📦 Function to install system dependencies
 install_system_deps() {
+    setup_dirs
     echo -e "${YELLOW}📦 Installing system dependencies...${NC}"
     progress_bar 10
     sudo apt-get update >> "$LOG_FILE" 2>&1
@@ -54,6 +61,7 @@ install_system_deps() {
 
 # 🚀 Function to install project
 install_project() {
+    setup_dirs
     echo -e "${YELLOW}🚀 Installing kuma-monitoring-reporter...${NC}"
     if [ ! -d "$PROJECT_DIR" ]; then
         echo -e "${CYAN}📥 Cloning repository...${NC}"
@@ -76,8 +84,6 @@ install_project() {
         read -p "Press Enter to continue..."
         exit 1
     }
-    mkdir -p config logs
-    touch logs/error.log logs/install.log
     echo -e "${GREEN}🎉 Project installed successfully!${NC}"
     echo -e "Run it with: ${CYAN}source $VENV_DIR/bin/activate; python3 report.py${NC}"
     read -p "Press Enter to continue..."
@@ -85,8 +91,8 @@ install_project() {
 
 # ⚙️ Function to configure config.json
 configure_json() {
+    setup_dirs
     echo -e "${YELLOW}⚙️ Configuring config.json...${NC}"
-    mkdir -p "$PROJECT_DIR/config"
     echo -e "${CYAN}📝 Let's set up your configuration:${NC}"
     read -p "🌐 Uptime Kuma metrics URL (e.g., http://localhost:3001/metrics): " kuma_url
     read -p "🤖 Telegram bot token: " telegram_bot_token
@@ -95,7 +101,7 @@ configure_json() {
     read -p "✅ Good threshold (ms, e.g., 100): " good
     read -p "⚠️ Warning threshold (ms, e.g., 250): " warning
     read -p "🚨 Critical threshold (ms, e.g., 500): " critical
-    read -p "⏰ Report interval (minutes, e.g., 1 for every minute): " report_interval
+    read -p "⏰ Report interval (minutes, e.g., 1): " report_interval
 
     cat > "$CONFIG_FILE" <<EOF
 {
@@ -117,6 +123,7 @@ EOF
 
 # 🔄 Function to update project
 update_project() {
+    setup_dirs
     echo -e "${YELLOW}🔄 Updating kuma-monitoring-reporter...${NC}"
     cd "$PROJECT_DIR" || {
         echo -e "${RED}❌ Project directory not found${NC}"
@@ -148,6 +155,7 @@ update_project() {
 
 # 🛠 Function to setup systemd service
 setup_service() {
+    setup_dirs
     echo -e "${YELLOW}🛠 Setting up systemd service...${NC}"
     if [ ! -f "$CONFIG_FILE" ]; then
         echo -e "${RED}❌ Config file not found. Please configure it first.${NC}"
@@ -180,6 +188,7 @@ EOF
 
 # 🛑 Function to stop bot
 stop_bot() {
+    setup_dirs
     echo -e "${YELLOW}🛑 Stopping bot...${NC}"
     if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
         sudo systemctl stop "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
@@ -192,6 +201,7 @@ stop_bot() {
 
 # 🔄 Function to restart bot
 restart_bot() {
+    setup_dirs
     echo -e "${YELLOW}🔄 Restarting bot...${NC}"
     if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
         sudo systemctl restart "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
@@ -205,6 +215,7 @@ restart_bot() {
 
 # 📬 Function to test Telegram configuration
 test_telegram() {
+    setup_dirs
     echo -e "${YELLOW}📬 Testing Telegram configuration...${NC}"
     source "$VENV_DIR/bin/activate"
     python3 -c "
@@ -225,6 +236,7 @@ else:
 
 # 💾 Function to backup logs
 backup_logs() {
+    setup_dirs
     echo -e "${YELLOW}💾 Backing up logs...${NC}"
     backup_dir="$PROJECT_DIR/logs/backup-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$backup_dir"
@@ -237,6 +249,7 @@ backup_logs() {
 
 # 📊 Function to show project status
 show_status() {
+    setup_dirs
     echo -e "${YELLOW}📊 Checking project status...${NC}"
     if [ -d "$PROJECT_DIR" ]; then
         echo -e "${GREEN}✅ Project directory: $PROJECT_DIR${NC}"
@@ -259,6 +272,7 @@ show_status() {
 
 # 🔍 Function to check dependencies
 check_deps() {
+    setup_dirs
     echo -e "${YELLOW}🔍 Checking dependencies...${NC}"
     for cmd in git python3 pip jq; do
         if command_exists "$cmd"; then
@@ -278,6 +292,7 @@ check_deps() {
 
 # 🗑️ Function to remove project
 remove_project() {
+    setup_dirs
     echo -e "${YELLOW}🗑️ Removing kuma-monitoring-reporter...${NC}"
     if [ -d "$PROJECT_DIR" ]; then
         stop_bot
