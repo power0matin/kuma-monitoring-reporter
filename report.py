@@ -40,7 +40,9 @@ def main():
         logging.info(f"Parsed metrics: {metrics}")
         message = format_message(metrics, config["thresholds"])
         logging.info(f"Formatted message: {message}")
-        send_telegram_message(message)
+        send_telegram_message(
+            config["telegram_bot_token"], config["telegram_chat_id"], message
+        )
         logging.info("Message sent successfully")
     except Exception as e:
         logging.error(f"Error in main: {e}")

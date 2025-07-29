@@ -81,15 +81,9 @@ function edit_config() {
   read -p "🟡 Warning threshold (ms, e.g. 500): " warning
   read -p "🔴 Critical threshold (ms, e.g. 1000): " critical
   read -p "⏰ Report interval (minutes, e.g. 1 for every minute): " report_interval
-  read -p "🔔 Notification mode (sound/silent): " notification_mode
 
   if ! [[ "$report_interval" =~ ^[0-9]+$ ]] || [ "$report_interval" -lt 1 ]; then
     echo "Report interval must be a positive integer."
-    exit 1
-  fi
-
-  if [[ "$notification_mode" != "sound" && "$notification_mode" != "silent" ]]; then
-    echo "Notification mode must be 'sound' or 'silent'."
     exit 1
   fi
 
@@ -191,7 +185,7 @@ function test_telegram() {
 from core.telegram import test_telegram_notification
 result = test_telegram_notification()
 if result['status'] == 'success':
-    print(f"Test message sent successfully. Silent mode: {result['silent']}")
+    print(f"Test message sent successfully.)
 else:
     print(f"Failed to send test message: {result['error']}")
 EOF
