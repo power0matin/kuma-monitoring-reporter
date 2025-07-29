@@ -1,7 +1,6 @@
 import schedule
 import time
 import logging
-
 from core.fetch import fetch_metrics
 from core.formatter import format_report
 from core.telegram import send_message, load_config
