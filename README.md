@@ -1,12 +1,12 @@
-# 📡 Kuma Status Reporter
+# 📡 Kuma monitoring Reporter
 
-Monitoring status reporter from Uptime Kuma to Telegram — simple, beautiful and modular.
+Monitoring monitoring reporter from Uptime Kuma to Telegram — simple, beautiful and modular.
 
 ## ✨ Features
 
 - 🛠 Fully modular and extensible
 - ✅ Well-formatted Markdown messages
-- 🟢🟡🔴 Status display with emoji based on response speed
+- 🟢🟡🔴 monitoring display with emoji based on response speed
 - 🔐 Easy configuration via `config/config.json`
 - 📡 Support for various monitors (ping, http, port, group, etc.)
 
@@ -15,7 +15,7 @@ Monitoring status reporter from Uptime Kuma to Telegram — simple, beautiful an
 ### 🔧 1. Automatic Install (Recommended)
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/power0matin/kuma-status-reporter/main/install.sh)
+bash <(curl -s https://raw.githubusercontent.com/power0matin/kuma-monitoring-reporter/main/install.sh)
 ```
 
 The installation script includes:
@@ -30,8 +30,8 @@ The installation script includes:
 #### 📥 Clone the repository
 
 ```bash
-git clone https://github.com/power0matin/kuma-status-reporter.git
-cd kuma-status-reporter
+git clone https://github.com/power0matin/kuma-monitoring-reporter.git
+cd kuma-monitoring-reporter
 ```
 
 #### 📦 Install dependencies
