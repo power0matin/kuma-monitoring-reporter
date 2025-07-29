@@ -4,27 +4,26 @@ REPO_URL="https://github.com/power0matin/kuma-monitoring-reporter.git"
 INSTALL_DIR="$HOME/kuma-monitoring-reporter"
 CONFIG_FILE="$INSTALL_DIR/config/config.json"
 SYSTEMD_SERVICE="/etc/systemd/system/kuma-reporter.service"
+BACKUP_DIR="/tmp/kuma-backup"
+LOG_FILE="$INSTALL_DIR/logs/error.log"
 
 # چک کردن پیش‌نیازها
-command -v git >/dev/null 2>&1 || { echo "❌ Git is not installed. Please install Git."; exit 1; }
-command -v python3 >/dev/null 2>&1 || { echo "❌ Python3 is not installed."; exit 1; }
-command -v pip3 >/dev/null 2>&1 || { echo "❌ pip3 is not installed."; exit 1; }
-command -v systemctl >/dev/null 2>&1 || { echo "❌ Systemd is not installed."; exit 1; }
+command -v git >/dev/null 2>&1 || { echo "Git is not installed. Please install Git."; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "Python3 is not installed."; exit 1; }
+command -v pip3 >/dev/null 2>&1 || { echo "pip3 is not installed."; exit 1; }
+command -v systemctl >/dev/null 2>&1 || { echo "Systemd is not installed."; exit 1; }
 
 function install_project() {
   echo "Installing kuma-monitoring-reporter project ..."
 
-  # چک کردن وجود دایرکتوری
   if [ -d "$INSTALL_DIR" ]; then
     echo "Directory already exists: $INSTALL_DIR"
     echo "Please use 'Update project' (option 3) or remove the directory first."
     return 1
   fi
 
-  # اطمینان از وجود دایرکتوری والد
   mkdir -p "$(dirname "$INSTALL_DIR")" || { echo "Failed to create parent directory."; exit 1; }
 
-  # کلون کردن مخزن
   echo "Cloning repository from $REPO_URL..."
   git clone "$REPO_URL" "$INSTALL_DIR" || {
     echo "Failed to clone repository. Check network or repository URL."
@@ -82,11 +81,10 @@ function edit_config() {
   read -p "Critical threshold (ms, e.g. 1000): " critical
   read -p "Report interval (minutes, e.g. 1 for every minute): " report_interval
 
-  # اعتبارسنجی report_interval
   if ! [[ "$report_interval" =~ ^[0-9]+$ ]] || [ "$report_interval" -lt 1 ]; then
     echo "Report interval must be a positive integer."
     exit 1
-  
+  }
 
   cat > "$CONFIG_FILE" <<EOF
 {
@@ -109,7 +107,6 @@ EOF
 function setup_systemd() {
   echo "Setting up systemd service for kuma-monitoring-reporter ..."
 
-  # چک کردن وجود فایل سرویس
   if [ -f "$SYSTEMD_SERVICE" ]; then
     echo "Systemd service already exists: $SYSTEMD_SERVICE"
     read -p "Do you want to overwrite it? (y/n): " overwrite
@@ -117,9 +114,8 @@ function setup_systemd() {
       echo "Operation canceled."
       return 1
     fi
-  fi
+  }
 
-  # ایجاد فایل سرویس
   cat > "$SYSTEMD_SERVICE" <<EOF
 [Unit]
 Description=Kuma Monitoring Reporter Service
@@ -135,13 +131,144 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-  # اعمال تغییرات و فعال‌سازی سرویس
   systemctl daemon-reload || { echo "Failed to reload systemd daemon."; exit 1; }
   systemctl enable kuma-reporter.service || { echo "Failed to enable systemd service."; exit 1; }
   systemctl start kuma-reporter.service || { echo "Failed to start systemd service."; exit 1; }
 
   echo "Systemd service setup successfully."
   echo "Check status: systemctl status kuma-reporter.service"
+}
+
+function stop_bot() {
+  echo "Stopping kuma-monitoring-reporter bot ..."
+
+  if [ -f "$SYSTEMD_SERVICE" ]; then
+    systemctl stop kuma-reporter.service 2>/dev/null && echo "Systemd service stopped."
+    read -p "Do you want to disable the service? (y/n): " disable
+    if [[ "$disable" == "y" ]]; then
+      systemctl disable kuma-reporter.service 2>/dev/null && echo "Systemd service disabled."
+    fi
+  else
+    echo "No systemd service found. Checking for running processes ..."
+    pids=$(pgrep -f "python3 $INSTALL_DIR/report.py")
+    if [ -n "$pids" ]; then
+      echo "Found running bot processes (PIDs: $pids)."
+      read -p "Do you want to terminate them? (y/n): " confirm
+      if [[ "$confirm" == "y" ]]; then
+        kill $pids && echo "Bot processes terminated."
+      else
+        echo "Operation canceled."
+      fi
+    else
+      echo "No running bot processes found."
+    fi
+  fi
+
+  echo "Bot stop operation completed."
+}
+
+function test_telegram() {
+  echo "Testing Telegram configuration ..."
+
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Config file not found: $CONFIG_FILE"
+    echo "Please configure the project first using option 2."
+    exit 1
+  fi
+
+  # خواندن تنظیمات تلگرام
+  telegram_bot_token=$(jq -r '.telegram_bot_token' "$CONFIG_FILE")
+  telegram_chat_id=$(jq -r '.telegram_chat_id' "$CONFIG_FILE")
+
+  if [ -z "$telegram_bot_token" ] || [ -z "$telegram_chat_id" ]; then
+    echo "Invalid Telegram configuration in $CONFIG_FILE"
+    exit 1
+  }
+
+  # ارسال پیام تستی
+  curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
+    -d "chat_id=$telegram_chat_id" \
+    -d "text=Test message from kuma-monitoring-reporter" >/dev/null
+
+  if [ $? -eq 0 ]; then
+    echo "Test message sent successfully to Telegram."
+  else
+    echo "Failed to send test message. Check Telegram bot token and chat ID."
+  fi
+}
+
+function backup_logs() {
+  echo "Backing up logs ..."
+
+  if [ ! -f "$LOG_FILE" ]; then
+    echo "No log file found: $LOG_FILE"
+    return 1
+  fi
+
+  mkdir -p "$BACKUP_DIR" || { echo "Failed to create backup directory."; exit 1; }
+  timestamp=$(date +%Y%m%d_%H%M%S)
+  backup_file="$BACKUP_DIR/logs_$timestamp.tar.gz"
+
+  tar -czf "$backup_file" "$LOG_FILE" || { echo "Failed to create backup."; exit 1; }
+  echo "Logs backed up successfully to $backup_file."
+}
+
+function show_status() {
+  echo "Project status for kuma-monitoring-reporter ..."
+
+  echo "Directory: $INSTALL_DIR"
+  if [ -d "$INSTALL_DIR" ]; then
+    cd "$INSTALL_DIR" || { echo "Failed to access directory."; exit 1; }
+    echo "Git version: $(git rev-parse --short HEAD 2>/dev/null || echo 'Not a git repository')"
+  else
+    echo "Project not installed."
+  fi
+
+  echo "Config file: $CONFIG_FILE"
+  if [ -f "$CONFIG_FILE" ]; then
+    echo "Configuration:"
+    jq '.' "$CONFIG_FILE"
+  else
+    echo "Config file not found."
+  fi
+
+  echo "Systemd service: $SYSTEMD_SERVICE"
+  if [ -f "$SYSTEMD_SERVICE" ]; then
+    systemctl status kuma-reporter.service --no-pager
+  else
+    echo "Systemd service not setup."
+  fi
+
+  echo "Running processes:"
+  pgrep -f "python3 $INSTALL_DIR/report.py" && echo "Bot is running." || echo "No bot processes found."
+}
+
+function restart_service() {
+  echo "Restarting kuma-monitoring-reporter service ..."
+
+  if [ -f "$SYSTEMD_SERVICE" ]; then
+    systemctl restart kuma-reporter.service || { echo "Failed to restart systemd service."; exit 1; }
+    echo "Systemd service restarted successfully."
+    echo "Check status: systemctl status kuma-reporter.service"
+  else
+    echo "No systemd service found. Please setup the service using option 4."
+  fi
+}
+
+function check_dependencies() {
+  echo "Checking dependencies ..."
+
+  if [ ! -d "$INSTALL_DIR" ]; then
+    echo "Project directory does not exist: $INSTALL_DIR"
+    exit 1
+  fi
+
+  cd "$INSTALL_DIR" || { echo "Failed to change directory to $INSTALL_DIR"; exit 1; }
+  source venv/bin/activate
+  pip install -r requirements.txt || { echo "Failed to install dependencies."; deactivate; exit 1; }
+  deactivate
+
+  echo "All dependencies are installed."
 }
 
 function uninstall_project() {
@@ -151,17 +278,15 @@ function uninstall_project() {
 
   if [[ "$confirm" == "y" ]]; then
     if [[ "$keep_config" == "y" ]]; then
-      # کپی config.json به دایرکتوری موقت
-      mkdir -p /tmp/kuma-backup
-      cp "$CONFIG_FILE" /tmp/kuma-backup/config.json 2>/dev/null && echo "config.json backed up to /tmp/kuma-backup/config.json"
+      mkdir -p "$BACKUP_DIR"
+      cp "$CONFIG_FILE" "$BACKUP_DIR/config.json" 2>/dev/null && echo "config.json backed up to $BACKUP_DIR/config.json"
       rm -rf "$INSTALL_DIR"
-      echo "Project deleted, config.json preserved in /tmp/kuma-backup/config.json."
+      echo "Project deleted, config.json preserved in $BACKUP_DIR/config.json."
     else
       rm -rf "$INSTALL_DIR"
       echo "Project and config.json deleted."
     fi
 
-    # غیرفعال کردن و حذف سرویس systemd
     if [ -f "$SYSTEMD_SERVICE" ]; then
       systemctl stop kuma-reporter.service 2>/dev/null
       systemctl disable kuma-reporter.service 2>/dev/null
@@ -182,7 +307,13 @@ function menu() {
   echo "2. Configure config.json file"
   echo "3. Update project"
   echo "4. Setup systemd service"
-  echo "5. Completely remove project"
+  echo "5. Stop bot"
+  echo "6. Test Telegram configuration"
+  echo "7. Backup logs"
+  echo "8. Show project status"
+  echo "9. Restart systemd service"
+  echo "10. Check dependencies"
+  echo "11. Completely remove project"
   echo "0. Exit"
   echo "-------------------------------------"
 
@@ -193,7 +324,13 @@ function menu() {
     2) edit_config ;;
     3) update_project ;;
     4) setup_systemd ;;
-    5) uninstall_project ;;
+    5) stop_bot ;;
+    6) test_telegram ;;
+    7) backup_logs ;;
+    8) show_status ;;
+    9) restart_service ;;
+    10) check_dependencies ;;
+    11) uninstall_project ;;
     0) echo "Bye!"; exit 0 ;;
     *) echo "Invalid option"; sleep 2; menu ;;
   esac
