@@ -8,16 +8,12 @@ VENV_DIR="$PROJECT_DIR/venv"
 CONFIG_FILE="$PROJECT_DIR/config/config.json"
 SERVICE_NAME="kuma-reporter"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
-LOG_FILE="$PROJECT_DIR/logs/install.log"
 
 # 🎨 Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
-
-mkdir -p "$(dirname "$LOG_FILE")"
-touch "$LOG_FILE"
 
 # 🛠️ Function to check if a command exists
 command_exists() {
@@ -27,9 +23,9 @@ command_exists() {
 # 📦 Function to install system dependencies
 install_system_deps() {
     echo -e "${YELLOW}📦 Installing system dependencies...${NC}"
-    sudo apt-get update >> "$LOG_FILE" 2>&1
-    sudo apt-get install -y git python3 python3-pip python3-venv jq >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to install system dependencies. Check $LOG_FILE for details.${NC}"
+    sudo apt-get update
+    sudo apt-get install -y git python3 python3-pip python3-venv jq || {
+        echo -e "${RED}❌ Failed to install system dependencies${NC}"
         exit 1
     }
     echo -e "${GREEN}✅ System dependencies installed${NC}"
@@ -39,21 +35,21 @@ install_system_deps() {
 install_project() {
     echo -e "${YELLOW}🚀 Installing kuma-monitoring-reporter...${NC}"
     if [ ! -d "$PROJECT_DIR" ]; then
-        git clone "$REPO_URL" "$PROJECT_DIR" >> "$LOG_FILE" 2>&1 || {
-            echo -e "${RED}❌ Failed to clone repository. Check $LOG_FILE for details.${NC}"
+        git clone "$REPO_URL" "$PROJECT_DIR" || {
+            echo -e "${RED}❌ Failed to clone repository${NC}"
             exit 1
         }
     fi
     cd "$PROJECT_DIR" || exit 1
     python3 -m venv venv
     source venv/bin/activate
-    pip install --upgrade pip >> "$LOG_FILE" 2>&1
-    pip install -r requirements.txt >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to install Python dependencies. Check $LOG_FILE for details.${NC}"
+    pip install --upgrade pip
+    pip install -r requirements.txt || {
+        echo -e "${RED}❌ Failed to install Python dependencies${NC}"
         exit 1
     }
     mkdir -p config logs
-    touch logs/error.log logs/install.log
+    touch logs/error.log
     echo -e "${GREEN}✅ Project installed successfully${NC}"
     echo -e "Run the project: source $VENV_DIR/bin/activate; python3 report.py"
 }
@@ -62,14 +58,14 @@ install_project() {
 configure_json() {
     echo -e "${YELLOW}⚙️ Configuring config.json...${NC}"
     mkdir -p "$PROJECT_DIR/config"
-    read -p "🌐 Enter Uptime Kuma metrics URL (e.g., http://localhost:3001/metrics): " kuma_url
+    read -p "🌐 Enter Uptime Kuma metrics URL (e.g., http://your-server:3001/metrics): " kuma_url
     read -p "🤖 Enter Telegram bot token: " telegram_bot_token
     read -p "💬 Enter Telegram chat ID: " telegram_chat_id
-    read -p "🔑 Enter Uptime Kuma API key or password: " auth_token
-    read -p "✅ Enter good threshold (ms, e.g. 100): " good
-    read -p "⚠️ Enter warning threshold (ms, e.g. 250): " warning
-    read -p "🚨 Enter critical threshold (ms, e.g. 500): " critical
-    read -p "⏰ Enter report interval (minutes, e.g. 1 for every minute): " report_interval
+    read -p "🔑 Enter Uptime Kuma API key or password (leave empty if not required): " auth_token
+    read -p "✅ Enter good threshold (ms): " good
+    read -p "⚠️ Enter warning threshold (ms): " warning
+    read -p "🚨 Enter critical threshold (ms): " critical
+    read -p "⏰ Enter report interval (minutes): " report_interval
 
     cat > "$CONFIG_FILE" <<EOF
 {
@@ -95,23 +91,23 @@ update_project() {
         echo -e "${RED}❌ Project directory not found${NC}"
         exit 1
     }
-    git pull origin main >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to pull latest changes. Check $LOG_FILE for details.${NC}"
+    git pull origin main || {
+        echo -e "${RED}❌ Failed to pull latest changes${NC}"
         exit 1
     }
     source venv/bin/activate
-    pip install --upgrade pip >> "$LOG_FILE" 2>&1
-    pip install -r requirements.txt >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to update Python dependencies. Check $LOG_FILE for details.${NC}"
+    pip install --upgrade pip
+    pip install -r requirements.txt || {
+        echo -e "${RED}❌ Failed to update Python dependencies${NC}"
         exit 1
     }
     echo -e "${GREEN}✅ Project updated successfully${NC}"
     echo -e "Run the project: source $VENV_DIR/bin/activate; python3 report.py"
 }
 
-# 🛠 Function to setup systemd service
+# 🛠️ Function to setup systemd service
 setup_service() {
-    echo -e "${YELLOW}🛠 Setting up systemd service...${NC}"
+    echo -e "${YELLOW}🛠️ Setting up systemd service...${NC}"
     if [ ! -f "$CONFIG_FILE" ]; then
         echo -e "${RED}❌ Config file not found. Please configure it first.${NC}"
         exit 1
@@ -141,7 +137,7 @@ EOF
 stop_bot() {
     echo -e "${YELLOW}🛑 Stopping bot...${NC}"
     if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-        sudo systemctl stop "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
+        sudo systemctl stop "$SERVICE_NAME"
         echo -e "${GREEN}✅ Bot stopped${NC}"
     else
         echo -e "${RED}❌ Bot is not running${NC}"
@@ -152,7 +148,7 @@ stop_bot() {
 restart_bot() {
     echo -e "${YELLOW}🔄 Restarting bot...${NC}"
     if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-        sudo systemctl restart "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
+        sudo systemctl restart "$SERVICE_NAME"
         echo -e "${GREEN}✅ Bot restarted${NC}"
         sudo systemctl status "$SERVICE_NAME" --no-pager
     else
@@ -235,7 +231,7 @@ remove_project() {
     if [ -d "$PROJECT_DIR" ]; then
         stop_bot
         sudo rm -f "$SERVICE_FILE"
-        sudo systemctl daemon-reload >> "$LOG_FILE" 2>&1
+        sudo systemctl daemon-reload
         rm -rf "$PROJECT_DIR"
         echo -e "${GREEN}✅ Project removed successfully${NC}"
     else
@@ -246,7 +242,6 @@ remove_project() {
 # 🚀 Service Management Submenu
 service_management() {
     while true; do
-        clear
         echo -e "\n🌟 Service Management Menu"
         echo "-------------------------------------"
         echo "1. Stop bot 🛑"
@@ -257,20 +252,19 @@ service_management() {
         echo "-------------------------------------"
         read -p "Choose an option: " sub_choice
         case $sub_choice in
-            1) clear; stop_bot ;;
-            2) clear; restart_bot ;;
-            3) clear; show_status ;;
-            4) clear; setup_service ;;
+            1) stop_bot ;;
+            2) restart_bot ;;
+            3) show_status ;;
+            4) setup_service ;;
             0) break ;;
-            *) clear; echo -e "${RED}❌ Invalid option${NC}" ;;
+            *) echo -e "${RED}❌ Invalid option${NC}" ;;
         esac
     done
 }
 
 # 📋 Main Menu
 while true; do
-    clear
-    echo -e "\n🌟 kuma-monitoring-reporter Installer"
+    echo -e "\n🌟 kuma-monitoring-reporter Installer V1"
     echo "-------------------------------------"
     echo "1. Install project 🚀"
     echo "2. Configure config.json ⚙️"
@@ -285,15 +279,15 @@ while true; do
     read -p "Choose an option: " choice
 
     case $choice in
-        1) clear; install_system_deps; install_project ;;
-        2) clear; configure_json ;;
-        3) clear; update_project ;;
+        1) install_system_deps; install_project ;;
+        2) configure_json ;;
+        3) update_project ;;
         4) service_management ;;
-        5) clear; test_telegram ;;
-        6) clear; backup_logs ;;
-        7) clear; check_deps ;;
-        8) clear; remove_project ;;
-        0) clear; echo -e "${YELLOW}⬅️ Exiting...${NC}"; exit 0 ;;
-        *) clear; echo -e "${RED}❌ Invalid option${NC}" ;;
+        5) test_telegram ;;
+        6) backup_logs ;;
+        7) check_deps ;;
+        8) remove_project ;;
+        0) echo -e "${YELLOW}⬅️ Exiting...${NC}"; exit 0 ;;
+        *) echo -e "${RED}❌ Invalid option${NC}" ;;
     esac
 done
