@@ -84,7 +84,7 @@ function edit_config() {
   if ! [[ "$report_interval" =~ ^[0-9]+$ ]] || [ "$report_interval" -lt 1 ]; then
     echo "Report interval must be a positive integer."
     exit 1
-  }
+  
 
   cat > "$CONFIG_FILE" <<EOF
 {
@@ -114,7 +114,7 @@ function setup_systemd() {
       echo "Operation canceled."
       return 1
     fi
-  }
+  
 
   cat > "$SYSTEMD_SERVICE" <<EOF
 [Unit]
@@ -183,7 +183,7 @@ function test_telegram() {
   if [ -z "$telegram_bot_token" ] || [ -z "$telegram_chat_id" ]; then
     echo "Invalid Telegram configuration in $CONFIG_FILE"
     exit 1
-  }
+  
 
   # ارسال پیام تستی
   curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
