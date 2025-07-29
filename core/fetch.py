@@ -18,8 +18,6 @@ def fetch_metrics(kuma_url, auth_token=None):
         parsed_metrics = []
         for line in metrics:
             if line.startswith("uptimekuma_monitor"):
-                # Example: uptimekuma_monitor_info{monitor_name="Germany_hetzner",monitor_type="ping"} 1
-                # or uptimekuma_monitor_response_ms{monitor_name="Germany_hetzner"} 77.4
                 if "monitor_name" in line:
                     name = line.split('monitor_name="')[1].split('"')[0]
                     if "monitor_type" in line:
