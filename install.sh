@@ -28,26 +28,10 @@ setup_dirs() {
     touch "$PROJECT_DIR/logs/install.log" "$PROJECT_DIR/logs/error.log"
 }
 
-# 📈 Simple progress bar (always completes to 100%)
-progress_bar() {
-    local duration=$1
-    local width=30
-    for ((i=0; i<=100; i+=5)); do
-        local done=$((i * width / 100))
-        local undone=$((width - done))
-        local done_bar=$(printf "%${done}s" | tr ' ' '█')
-        local undone_bar=$(printf "%${undone}s" | tr ' ' ' ')
-        printf "\r${YELLOW}Processing... [${done_bar}${undone_bar}] $i%%${NC}"
-        sleep $(echo "$duration/20" | bc -l)
-    done
-    echo -e "\n"
-}
-
 # 📦 Function to install system dependencies
 install_system_deps() {
     setup_dirs
     echo -e "${YELLOW}📦 Installing system dependencies...${NC}"
-    progress_bar 10
     sudo apt-get update >> "$LOG_FILE" 2>&1
     sudo apt-get install -y git python3 python3-pip python3-venv jq >> "$LOG_FILE" 2>&1 || {
         echo -e "${RED}❌ Failed to install dependencies. Check $LOG_FILE for details.${NC}"
@@ -64,7 +48,6 @@ install_project() {
     echo -e "${YELLOW}🚀 Installing kuma-monitoring-reporter...${NC}"
     if [ ! -d "$PROJECT_DIR" ]; then
         echo -e "${CYAN}📥 Cloning repository...${NC}"
-        progress_bar 10
         git clone "$REPO_URL" "$PROJECT_DIR" >> "$LOG_FILE" 2>&1 || {
             echo -e "${RED}❌ Failed to clone repository. Check $LOG_FILE for details.${NC}"
             read -p "Press Enter to continue..."
@@ -80,7 +63,6 @@ install_project() {
     python3 -m venv venv
     source venv/bin/activate
     echo -e "${CYAN}📦 Installing Python dependencies...${NC}"
-    progress_bar 10
     pip install --upgrade pip >> "$LOG_FILE" 2>&1
     # Create requirements.txt if it doesn't exist
     if [ ! -f requirements.txt ]; then
@@ -143,15 +125,17 @@ update_project() {
         return 1
     }
     echo -e "${CYAN}📥 Pulling latest changes...${NC}"
-    progress_bar 8
+    # Try pulling from main, fallback to master
     git pull origin main >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to pull latest changes. Check $LOG_FILE for details.${NC}"
-        read -p "Press Enter to continue..."
-        return 1
+        echo -e "${CYAN}📥 Trying to pull from master branch...${NC}"
+        git pull origin master >> "$LOG_FILE" 2>&1 || {
+            echo -e "${RED}❌ Failed to pull latest changes. Check $LOG_FILE for details.${NC}"
+            read -p "Press Enter to continue..."
+            return 1
+        }
     }
     source venv/bin/activate
     echo -e "${CYAN}📦 Updating Python dependencies...${NC}"
-    progress_bar 8
     pip install --upgrade pip >> "$LOG_FILE" 2>&1
     # Ensure requirements.txt exists
     if [ ! -f requirements.txt ]; then
@@ -173,6 +157,7 @@ EOF
     read -p "Press Enter to continue..."
 }
 
+# 🛠 Function to setup systemd service
 setup_service() {
     setup_dirs
     echo -e "${YELLOW}🛠 Setting up systemd service...${NC}"
@@ -181,8 +166,12 @@ setup_service() {
         read -p "Press Enter to continue..."
         return 1
     fi
+    if [ ! -f "$PROJECT_DIR/report.py" ]; then
+        echo -e "${RED}❌ report.py not found in $PROJECT_DIR. Please ensure the project is installed correctly.${NC}"
+        read -p "Press Enter to continue..."
+        return 1
+    fi
     echo -e "${CYAN}⚙️ Creating service file...${NC}"
-    progress_bar 5
     sudo bash -c "cat > $SERVICE_FILE" <<EOF
 [Unit]
 Description=Kuma Monitoring Reporter Service
@@ -197,9 +186,21 @@ User=$USER
 [Install]
 WantedBy=multi-user.target
 EOF
-    sudo systemctl daemon-reload >> "$LOG_FILE" 2>&1
-    sudo systemctl enable "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
-    sudo systemctl start "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
+    sudo systemctl daemon-reload >> "$LOG_FILE" 2>&1 || {
+        echo -e "${RED}❌ Failed to reload systemd daemon. Check $LOG_FILE for details.${NC}"
+        read -p "Press Enter to continue..."
+        return 1
+    }
+    sudo systemctl enable "$SERVICE_NAME" >> "$LOG_FILE" 2>&1 || {
+        echo -e "${RED}❌ Failed to enable $SERVICE_NAME. Check $LOG_FILE for details.${NC}"
+        read -p "Press Enter to continue..."
+        return 1
+    }
+    sudo systemctl start "$SERVICE_NAME" >> "$LOG_FILE" 2>&1 || {
+        echo -e "${RED}❌ Failed to start $SERVICE_NAME. Check $LOG_FILE for details.${NC}"
+        read -p "Press Enter to continue..."
+        return 1
+    }
     echo -e "${GREEN}🎉 Systemd service setup and started${NC}"
     sudo systemctl status "$SERVICE_NAME" --no-pager
     read -p "Press Enter to continue..."
