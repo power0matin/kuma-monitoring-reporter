@@ -1,15 +1,31 @@
 import requests
 import logging
+import os
 
-logging.basicConfig(
-    filename="logs/error.log",
-    level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
+
+def setup_logging():
+    """Set up logging with automatic creation of logs directory and error.log file."""
+    log_dir = "logs"
+    log_file = os.path.join(log_dir, "error.log")
+
+    # Create logs directory if it doesn't exist
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    # Create error.log file if it doesn't exist
+    if not os.path.exists(log_file):
+        open(log_file, "a").close()  # Create empty file
+
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
 
 
 def fetch_metrics(config):
     """Fetch and parse metrics from Uptime Kuma's /metrics endpoint."""
+    setup_logging()  # Set up logging
     kuma_url = config["kuma_url"]
     auth_token = config.get("auth_token")
 

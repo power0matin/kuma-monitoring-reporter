@@ -7,11 +7,25 @@ from core.fetcher import fetch_metrics
 from core.formatter import format_message
 from notifier.telegram import send_telegram_message
 
-logging.basicConfig(
-    filename="logs/error.log",
-    level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
+
+def setup_logging():
+    """Set up logging with automatic creation of logs directory and error.log file."""
+    log_dir = "logs"
+    log_file = os.path.join(log_dir, "error.log")
+
+    # Create logs directory if it doesn't exist
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    # Create error.log file if it doesn't exist
+    if not os.path.exists(log_file):
+        open(log_file, "a").close()  # Create empty file
+
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
 
 
 def load_config():
@@ -27,7 +41,7 @@ def load_config():
 def main():
     """Main function to fetch, format, and send reports."""
     config = load_config()
-    metrics = fetch_metrics(config)  # Pass the entire config dictionary
+    metrics = fetch_metrics(config)
     if metrics:
         message = format_message(metrics, config["thresholds"])
         if message:
@@ -42,6 +56,7 @@ def main():
 
 
 if __name__ == "__main__":
+    setup_logging()  # Set up logging before anything else
     config = load_config()
     schedule.every(config["report_interval"]).minutes.do(main)
     logging.info(
