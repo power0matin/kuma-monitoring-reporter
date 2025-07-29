@@ -5,7 +5,7 @@ import logging
 # Setup logging
 logging.basicConfig(
     filename="logs/error.log",
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
@@ -29,6 +29,30 @@ def send_message(message, silent=False):
     if not bot_token or not chat_id:
         logging.error("Missing telegram_bot_token or telegram_chat_id in config.json")
         raise ValueError("Invalid Telegram configuration")
+
+    # Escape special characters for MarkdownV2
+    special_chars = [
+        "_",
+        "*",
+        "[",
+        "]",
+        "(",
+        ")",
+        "~",
+        "`",
+        ">",
+        "#",
+        "+",
+        "-",
+        "=",
+        "|",
+        "{",
+        "}",
+        ".",
+        "!",
+    ]
+    for char in special_chars:
+        message = message.replace(char, f"\\{char}")
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
