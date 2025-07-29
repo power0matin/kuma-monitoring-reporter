@@ -22,63 +22,93 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# 🌐 Function to check GitHub connectivity
+check_github_connectivity() {
+    echo -e "${CYAN}🌐 Checking connectivity to GitHub...${NC}" | tee -a "$LOG_FILE"
+    if ! ping -c 1 github.com >/dev/null 2>&1; then
+        echo -e "${RED}❌ Cannot connect to GitHub. Check your network connection.${NC}" | tee -a "$LOG_FILE"
+        read -p "Press Enter to continue..."
+        return 1
+    fi
+    return 0
+}
+
 # 📁 Function to setup directories and log files
 setup_dirs() {
-    mkdir -p "$PROJECT_DIR/logs" "$PROJECT_DIR/config"
+    mkdir -p "$PROJECT_DIR/logs" "$PROJECT_DIR/config" "$PROJECT_DIR/core" "$PROJECT_DIR/notifier"
     touch "$PROJECT_DIR/logs/install.log" "$PROJECT_DIR/logs/error.log"
 }
 
 # 📦 Function to install system dependencies
 install_system_deps() {
     setup_dirs
-    echo -e "${YELLOW}📦 Installing system dependencies...${NC}"
+    echo -e "${YELLOW}📦 Installing system dependencies...${NC}" | tee -a "$LOG_FILE"
     sudo apt-get update >> "$LOG_FILE" 2>&1
     sudo apt-get install -y git python3 python3-pip python3-venv jq >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to install dependencies. Check $LOG_FILE for details.${NC}"
+        echo -e "${RED}❌ Failed to install dependencies. Check $LOG_FILE for details.${NC}" | tee -a "$LOG_FILE"
         read -p "Press Enter to continue..."
         return 1
     }
-    echo -e "${GREEN}🎉 System dependencies installed!${NC}"
+    echo -e "${GREEN}🎉 System dependencies installed!${NC}" | tee -a "$LOG_FILE"
     return 0
 }
 
 # 🚀 Function to install project
 install_project() {
     setup_dirs
-    echo -e "${YELLOW}🚀 Installing kuma-monitoring-reporter...${NC}"
+    echo -e "${YELLOW}🚀 Installing kuma-monitoring-reporter...${NC}" | tee -a "$LOG_FILE"
+    
+    # Check GitHub connectivity
+    check_github_connectivity || return 1
+    
+    # Remove existing directory if it's not a valid git repo
+    if [ -d "$PROJECT_DIR" ] && [ ! -d "$PROJECT_DIR/.git" ]; then
+        echo -e "${YELLOW}🗑 Removing invalid project directory...${NC}" | tee -a "$LOG_FILE"
+        rm -rf "$PROJECT_DIR"
+    fi
+    
     if [ ! -d "$PROJECT_DIR" ]; then
-        echo -e "${CYAN}📥 Cloning repository...${NC}"
+        echo -e "${CYAN}📥 Cloning repository...${NC}" | tee -a "$LOG_FILE"
         git clone "$REPO_URL" "$PROJECT_DIR" >> "$LOG_FILE" 2>&1 || {
-            echo -e "${RED}❌ Failed to clone repository. Check $LOG_FILE for details.${NC}"
+            echo -e "${RED}❌ Failed to clone repository. Check $LOG_FILE for details.${NC}" | tee -a "$LOG_FILE"
             read -p "Press Enter to continue..."
             return 1
         }
     fi
+    
     cd "$PROJECT_DIR" || {
-        echo -e "${RED}❌ Failed to access project directory${NC}"
+        echo -e "${RED}❌ Failed to access project directory${NC}" | tee -a "$LOG_FILE"
         read -p "Press Enter to continue..."
         return 1
     }
-    echo -e "${CYAN}🛠 Creating virtual environment...${NC}"
+    
+    # Check if report.py exists
+    if [ ! -f "$PROJECT_DIR/report.py" ]; then
+        echo -e "${RED}❌ report.py not found after cloning. Repository may be incomplete or incorrect.${NC}" | tee -a "$LOG_FILE"
+        read -p "Press Enter to continue..."
+        return 1
+    fi
+    
+    echo -e "${CYAN}🛠 Creating virtual environment...${NC}" | tee -a "$LOG_FILE"
     python3 -m venv venv
     source venv/bin/activate
-    echo -e "${CYAN}📦 Installing Python dependencies...${NC}"
+    echo -e "${CYAN}📦 Installing Python dependencies...${NC}" | tee -a "$LOG_FILE"
     pip install --upgrade pip >> "$LOG_FILE" 2>&1
     # Create requirements.txt if it doesn't exist
     if [ ! -f requirements.txt ]; then
-        echo -e "${CYAN}📝 Creating requirements.txt...${NC}"
+        echo -e "${CYAN}📝 Creating requirements.txt...${NC}" | tee -a "$LOG_FILE"
         cat > requirements.txt <<EOF
 requests
 schedule
 EOF
     fi
     pip install -r requirements.txt >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to install Python dependencies. Check $LOG_FILE for details.${NC}"
+        echo -e "${RED}❌ Failed to install Python dependencies. Check $LOG_FILE for details.${NC}" | tee -a "$LOG_FILE"
         read -p "Press Enter to continue..."
         return 1
     }
-    echo -e "${GREEN}🎉 Project installed successfully!${NC}"
-    echo -e "Run it with: ${CYAN}source $VENV_DIR/bin/activate; python3 report.py${NC}"
+    echo -e "${GREEN}🎉 Project installed successfully!${NC}" | tee -a "$LOG_FILE"
+    echo -e "Run it with: ${CYAN}source $VENV_DIR/bin/activate; python3 report.py${NC}" | tee -a "$LOG_FILE"
     read -p "Press Enter to continue..."
     return 0
 }
@@ -86,7 +116,7 @@ EOF
 # ⚙️ Function to configure config.json
 configure_json() {
     setup_dirs
-    echo -e "${YELLOW}⚙️ Configuring config.json...${NC}"
+    echo -e "${YELLOW}⚙️ Configuring config.json...${NC}" | tee -a "$LOG_FILE"
     echo -e "${CYAN}📝 Let's set up your configuration:${NC}"
     read -p "🌐 Uptime Kuma metrics URL (e.g., http://localhost:3001/metrics): " kuma_url
     read -p "🤖 Telegram bot token: " telegram_bot_token
@@ -111,67 +141,93 @@ configure_json() {
     "report_interval": $report_interval
 }
 EOF
-    echo -e "${GREEN}🎉 Config file created at $CONFIG_FILE${NC}"
+    echo -e "${GREEN}🎉 Config file created at $CONFIG_FILE${NC}" | tee -a "$LOG_FILE"
     read -p "Press Enter to continue..."
 }
 
 # 🔄 Function to update project
 update_project() {
     setup_dirs
-    echo -e "${YELLOW}🔄 Updating kuma-monitoring-reporter...${NC}"
-    cd "$PROJECT_DIR" || {
-        echo -e "${RED}❌ Project directory not found${NC}"
-        read -p "Press Enter to continue..."
-        return 1
-    }
-    echo -e "${CYAN}📥 Pulling latest changes...${NC}"
-    # Try pulling from main, fallback to master
-    git pull origin main >> "$LOG_FILE" 2>&1 || {
-        echo -e "${CYAN}📥 Trying to pull from master branch...${NC}"
-        git pull origin master >> "$LOG_FILE" 2>&1 || {
-            echo -e "${RED}❌ Failed to pull latest changes. Check $LOG_FILE for details.${NC}"
-            read -p "Press Enter to continue..."
+    clear
+    echo -e "${YELLOW}🔄 Updating kuma-monitoring-reporter...${NC}" | tee -a "$LOG_FILE"
+
+    check_github_connectivity || return 1
+
+    if [ ! -d "$PROJECT_DIR/.git" ]; then
+        echo -e "${RED}❌ Project directory is not a valid git repository${NC}" | tee -a "$LOG_FILE"
+        echo -e "${CYAN}📥 Attempting to re-clone repository...${NC}" | tee -a "$LOG_FILE"
+        rm -rf "$PROJECT_DIR"
+        git clone "$REPO_URL" "$PROJECT_DIR" >> "$LOG_FILE" 2>&1 || {
+            echo -e "${RED}❌ Failed to clone repository. Check $LOG_FILE for details.${NC}" | tee -a "$LOG_FILE"
             return 1
         }
+    fi
+
+    cd "$PROJECT_DIR" || {
+        echo -e "${RED}❌ Failed to access project directory${NC}" | tee -a "$LOG_FILE"
+        return 1
     }
-    source venv/bin/activate
-    echo -e "${CYAN}📦 Updating Python dependencies...${NC}"
+
+    echo -e "${CYAN}📥 Pulling latest changes...${NC}" | tee -a "$LOG_FILE"
+    git pull origin main >> "$LOG_FILE" 2>&1 || git pull origin master >> "$LOG_FILE" 2>&1 || {
+        echo -e "${RED}❌ Failed to pull latest changes.${NC}" | tee -a "$LOG_FILE"
+        return 1
+    }
+
+    if [ ! -f "$PROJECT_DIR/report.py" ]; then
+        echo -e "${RED}❌ report.py not found after update.${NC}" | tee -a "$LOG_FILE"
+        return 1
+    fi
+
+    if [ ! -f "$VENV_DIR/bin/activate" ]; then
+        echo -e "${CYAN}📦 Creating virtual environment...${NC}" | tee -a "$LOG_FILE"
+        python3 -m venv "$VENV_DIR" || {
+            echo -e "${RED}❌ Failed to create virtual environment${NC}" | tee -a "$LOG_FILE"
+            return 1
+        }
+    fi
+
+    source "$VENV_DIR/bin/activate" || {
+        echo -e "${RED}❌ Failed to activate virtual environment${NC}" | tee -a "$LOG_FILE"
+        return 1
+    }
+
+    echo -e "${CYAN}📦 Updating Python dependencies...${NC}" | tee -a "$LOG_FILE"
     pip install --upgrade pip >> "$LOG_FILE" 2>&1
-    # Ensure requirements.txt exists
     if [ ! -f requirements.txt ]; then
-        echo -e "${CYAN}📝 Creating requirements.txt...${NC}"
+        echo -e "${CYAN}📝 Creating requirements.txt...${NC}" | tee -a "$LOG_FILE"
         cat > requirements.txt <<EOF
 requests
 schedule
 EOF
     fi
     pip install -r requirements.txt >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to update Python dependencies. Check $LOG_FILE for details.${NC}"
-        read -p "Press Enter to continue..."
+        echo -e "${RED}❌ Failed to update Python dependencies${NC}" | tee -a "$LOG_FILE"
         return 1
     }
-    # Show project version if available
+
     VERSION=$(git describe --tags 2>/dev/null || echo "Unknown")
-    echo -e "${GREEN}🎉 Project updated to version: $VERSION${NC}"
-    echo -e "Run it with: ${CYAN}source $VENV_DIR/bin/activate; python3 report.py${NC}"
-    read -p "Press Enter to continue..."
+    echo -e "${GREEN}🎉 Project updated to version: $VERSION${NC}" | tee -a "$LOG_FILE"
+    echo -e "Run it with: ${CYAN}source $VENV_DIR/bin/activate; python3 report.py${NC}" | tee -a "$LOG_FILE"
 }
 
 # 🛠 Function to setup systemd service
 setup_service() {
     setup_dirs
-    echo -e "${YELLOW}🛠 Setting up systemd service...${NC}"
+    clear
+    echo -e "${YELLOW}🛠 Setting up systemd service...${NC}" | tee -a "$LOG_FILE"
+
     if [ ! -f "$CONFIG_FILE" ]; then
-        echo -e "${RED}❌ Config file not found. Please configure it first.${NC}"
-        read -p "Press Enter to continue..."
+        echo -e "${RED}❌ Config file not found: $CONFIG_FILE${NC}" | tee -a "$LOG_FILE"
         return 1
     fi
+
     if [ ! -f "$PROJECT_DIR/report.py" ]; then
-        echo -e "${RED}❌ report.py not found in $PROJECT_DIR. Please ensure the project is installed correctly.${NC}"
-        read -p "Press Enter to continue..."
+        echo -e "${RED}❌ report.py not found in $PROJECT_DIR${NC}" | tee -a "$LOG_FILE"
         return 1
     fi
-    echo -e "${CYAN}⚙️ Creating service file...${NC}"
+
+    echo -e "${CYAN}⚙️ Creating systemd service file...${NC}" | tee -a "$LOG_FILE"
     sudo bash -c "cat > $SERVICE_FILE" <<EOF
 [Unit]
 Description=Kuma Monitoring Reporter Service
@@ -182,110 +238,69 @@ ExecStart=$VENV_DIR/bin/python3 $PROJECT_DIR/report.py
 WorkingDirectory=$PROJECT_DIR
 Restart=always
 User=$USER
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
     sudo systemctl daemon-reload >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to reload systemd daemon. Check $LOG_FILE for details.${NC}"
-        read -p "Press Enter to continue..."
+        echo -e "${RED}❌ Failed to reload systemd daemon${NC}" | tee -a "$LOG_FILE"
         return 1
     }
+
     sudo systemctl enable "$SERVICE_NAME" >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to enable $SERVICE_NAME. Check $LOG_FILE for details.${NC}"
-        read -p "Press Enter to continue..."
+        echo -e "${RED}❌ Failed to enable $SERVICE_NAME${NC}" | tee -a "$LOG_FILE"
         return 1
     }
+
     sudo systemctl start "$SERVICE_NAME" >> "$LOG_FILE" 2>&1 || {
-        echo -e "${RED}❌ Failed to start $SERVICE_NAME. Check $LOG_FILE for details.${NC}"
-        read -p "Press Enter to continue..."
+        echo -e "${RED}❌ Failed to start $SERVICE_NAME${NC}" | tee -a "$LOG_FILE"
         return 1
     }
-    echo -e "${GREEN}🎉 Systemd service setup and started${NC}"
+
+    echo -e "${GREEN}🎉 Service $SERVICE_NAME started successfully${NC}" | tee -a "$LOG_FILE"
     sudo systemctl status "$SERVICE_NAME" --no-pager
-    read -p "Press Enter to continue..."
 }
 
-# 🛑 Function to stop bot
-stop_bot() {
-    setup_dirs
-    echo -e "${YELLOW}🛑 Stopping bot...${NC}"
-    if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-        sudo systemctl stop "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
-        echo -e "${GREEN}✅ Bot stopped${NC}"
-    else
-        echo -e "${RED}❌ Bot is not running${NC}"
-    fi
-    read -p "Press Enter to continue..."
-}
-
-# 🔄 Function to restart bot
-restart_bot() {
-    setup_dirs
-    echo -e "${YELLOW}🔄 Restarting bot...${NC}"
-    if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-        sudo systemctl restart "$SERVICE_NAME" >> "$LOG_FILE" 2>&1
-        echo -e "${GREEN}✅ Bot restarted${NC}"
-        sudo systemctl status "$SERVICE_NAME" --no-pager
-    else
-        echo -e "${RED}❌ Bot is not running${NC}"
-    fi
-    read -p "Press Enter to continue..."
-}
-
-# 📬 Function to test Telegram configuration
-test_telegram() {
-    setup_dirs
-    echo -e "${YELLOW}📬 Testing Telegram configuration...${NC}"
-    source "$VENV_DIR/bin/activate"
-    python3 -c "
-import json
-import requests
-with open('$CONFIG_FILE') as f:
-    config = json.load(f)
-url = f'https://api.telegram.org/bot{config[\"telegram_bot_token\"]}/sendMessage'
-data = {'chat_id': config['telegram_chat_id'], 'text': 'Test message from kuma-monitoring-reporter'}
-response = requests.post(url, data=data)
-if response.status_code == 200:
-    print('\033[0;32m✅ Test message sent successfully.\033[0m')
-else:
-    print(f'\033[0;31m❌ Failed to send test message: {response.text}\033[0m')
-"
-    read -p "Press Enter to continue..."
-}
 
 # 💾 Function to backup logs
 backup_logs() {
     setup_dirs
-    echo -e "${YELLOW}💾 Backing up logs...${NC}"
+    echo -e "${YELLOW}💾 Backing up logs...${NC}" | tee -a "$LOG_FILE"
     backup_dir="$PROJECT_DIR/logs/backup-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$backup_dir"
     cp -r "$PROJECT_DIR/logs/"*.log "$backup_dir" 2>/dev/null || {
-        echo -e "${RED}❌ No logs found to backup${NC}"
+        echo -e "${RED}❌ No logs found to backup${NC}" | tee -a "$LOG_FILE"
     }
-    echo -e "${GREEN}✅ Logs backed up to $backup_dir${NC}"
+    echo -e "${GREEN}✅ Logs backed up to $backup_dir${NC}" | tee -a "$LOG_FILE"
     read -p "Press Enter to continue..."
 }
 
 # 📊 Function to show project status
 show_status() {
     setup_dirs
-    echo -e "${YELLOW}📊 Checking project status...${NC}"
+    echo -e "${YELLOW}📊 Checking project status...${NC}" | tee -a "$LOG_FILE"
     if [ -d "$PROJECT_DIR" ]; then
-        echo -e "${GREEN}✅ Project directory: $PROJECT_DIR${NC}"
+        echo -e "${GREEN}✅ Project directory: $PROJECT_DIR${NC}" | tee -a "$LOG_FILE"
         if [ -f "$CONFIG_FILE" ]; then
-            echo -e "${GREEN}✅ Config file exists: $CONFIG_FILE${NC}"
+            echo -e "${GREEN}✅ Config file exists: $CONFIG_FILE${NC}" | tee -a "$LOG_FILE"
         else
-            echo -e "${RED}❌ Config file missing: $CONFIG_FILE${NC}"
+            echo -e "${RED}❌ Config file missing: $CONFIG_FILE${NC}" | tee -a "$LOG_FILE"
+        fi
+        if [ -f "$PROJECT_DIR/report.py" ]; then
+            echo -e "${GREEN}✅ report.py exists: $PROJECT_DIR/report.py${NC}" | tee -a "$LOG_FILE"
+        else
+            echo -e "${RED}❌ report.py missing: $PROJECT_DIR/report.py${NC}" | tee -a "$LOG_FILE"
         fi
         if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-            echo -e "${GREEN}✅ Service $SERVICE_NAME is running${NC}"
+            echo -e "${GREEN}✅ Service $SERVICE_NAME is running${NC}" | tee -a "$LOG_FILE"
             sudo systemctl status "$SERVICE_NAME" --no-pager
         else
-            echo -e "${RED}❌ Service $SERVICE_NAME is not running${NC}"
+            echo -e "${RED}❌ Service $SERVICE_NAME is not running${NC}" | tee -a "$LOG_FILE"
         fi
     else
-        echo -e "${RED}❌ Project directory not found: $PROJECT_DIR${NC}"
+        echo -e "${RED}❌ Project directory not found: $PROJECT_DIR${NC}" | tee -a "$LOG_FILE"
     fi
     read -p "Press Enter to continue..."
 }
@@ -293,19 +308,19 @@ show_status() {
 # 🔍 Function to check dependencies
 check_deps() {
     setup_dirs
-    echo -e "${YELLOW}🔍 Checking dependencies...${NC}"
+    echo -e "${YELLOW}🔍 Checking dependencies...${NC}" | tee -a "$LOG_FILE"
     for cmd in git python3 pip jq; do
         if command_exists "$cmd"; then
-            echo -e "${GREEN}✅ $cmd is installed${NC}"
+            echo -e "${GREEN}✅ $cmd is installed${NC}" | tee -a "$LOG_FILE"
         else
-            echo -e "${RED}❌ $cmd is not installed${NC}"
+            echo -e "${RED}❌ $cmd is not installed${NC}" | tee -a "$LOG_FILE"
         fi
     done
     if [ -d "$VENV_DIR" ]; then
         source "$VENV_DIR/bin/activate"
         pip list
     else
-        echo -e "${RED}❌ Virtual environment not found: $VENV_DIR${NC}"
+        echo -e "${RED}❌ Virtual environment not found: $VENV_DIR${NC}" | tee -a "$LOG_FILE"
     fi
     read -p "Press Enter to continue..."
 }
@@ -313,15 +328,15 @@ check_deps() {
 # 🗑️ Function to remove project
 remove_project() {
     setup_dirs
-    echo -e "${YELLOW}🗑️ Removing kuma-monitoring-reporter...${NC}"
+    echo -e "${YELLOW}🗑️ Removing kuma-monitoring-reporter...${NC}" | tee -a "$LOG_FILE"
     if [ -d "$PROJECT_DIR" ]; then
         stop_bot
         sudo rm -f "$SERVICE_FILE"
         sudo systemctl daemon-reload >> "$LOG_FILE" 2>&1
         rm -rf "$PROJECT_DIR"
-        echo -e "${GREEN}✅ Project removed successfully${NC}"
+        echo -e "${GREEN}✅ Project removed successfully${NC}" | tee -a "$LOG_FILE"
     else
-        echo -e "${RED}❌ Project directory not found: $PROJECT_DIR${NC}"
+        echo -e "${RED}❌ Project directory not found: $PROJECT_DIR${NC}" | tee -a "$LOG_FILE"
     fi
     read -p "Press Enter to continue..."
 }
@@ -345,7 +360,7 @@ service_management() {
             3) show_status ;;
             4) setup_service ;;
             0) break ;;
-            *) echo -e "${RED}❌ Invalid option${NC}"; read -p "Press Enter to continue..." ;;
+            *) echo -e "${RED}❌ Invalid option${NC}" | tee -a "$LOG_FILE"; read -p "Press Enter to continue..." ;;
         esac
     done
 }
@@ -377,7 +392,7 @@ while true; do
         6) backup_logs ;;
         7) check_deps ;;
         8) remove_project ;;
-        0) clear; echo -e "${YELLOW}⬅️ Thanks for using kuma-monitoring-reporter! Exiting...${NC}"; exit 0 ;;
-        *) echo -e "${RED}❌ Invalid option${NC}"; read -p "Press Enter to continue..." ;;
+        0) clear; echo -e "${YELLOW}⬅️ Thanks for using kuma-monitoring-reporter! Exiting...${NC}" | tee -a "$LOG_FILE"; exit 0 ;;
+        *) echo -e "${RED}❌ Invalid option${NC}" | tee -a "$LOG_FILE"; read -p "Press Enter to continue..." ;;
     esac
 done
