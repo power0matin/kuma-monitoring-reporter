@@ -73,14 +73,14 @@ function edit_config() {
 
   mkdir -p "$(dirname "$CONFIG_FILE")" || { echo "Failed to create config directory."; exit 1; }
 
-  read -p "🌐 Kuma Metrics URL (e.g. http://localhost:3001/metrics): " kuma_url
-  read -p "🤖 Telegram bot token: " telegram_bot_token
-  read -p "💬 Telegram chat ID (e.g. 123456789): " telegram_chat_id
-  read -p "🔑 API token for Kuma (leave empty if not needed): " auth_token
-  read -p "🟢 Good threshold (ms, e.g. 200): " good
-  read -p "🟡 Warning threshold (ms, e.g. 500): " warning
-  read -p "🔴 Critical threshold (ms, e.g. 1000): " critical
-  read -p "⏰ Report interval (minutes, e.g. 1 for every minute): " report_interval
+  read -p "Kuma Metrics URL (e.g. http://localhost:3001/metrics): " kuma_url
+  read -p "Telegram bot token: " telegram_bot_token
+  read -p "Telegram chat ID (e.g. 123456789): " telegram_chat_id
+  read -p "API token for Kuma (leave empty if not needed): " auth_token
+  read -p "Good threshold (ms, e.g. 200): " good
+  read -p "Warning threshold (ms, e.g. 500): " warning
+  read -p "Critical threshold (ms, e.g. 1000): " critical
+  read -p "Report interval (minutes, e.g. 1 for every minute): " report_interval
 
   if ! [[ "$report_interval" =~ ^[0-9]+$ ]] || [ "$report_interval" -lt 1 ]; then
     echo "Report interval must be a positive integer."
@@ -98,8 +98,7 @@ function edit_config() {
     "warning": $warning,
     "critical": $critical
   },
-  "report_interval": $report_interval,
-  "notification_mode": "$notification_mode"
+  "report_interval": $report_interval
 }
 EOF
 
@@ -178,19 +177,24 @@ function test_telegram() {
     exit 1
   fi
 
-  cd "$INSTALL_DIR" || { echo "Failed to change directory to $INSTALL_DIR"; exit 1; }
-  source venv/bin/activate
+  telegram_bot_token=$(jq -r '.telegram_bot_token' "$CONFIG_FILE")
+  telegram_chat_id=$(jq -r '.telegram_chat_id' "$CONFIG_FILE")
 
-  python3 - <<EOF
-from core.telegram import test_telegram_notification
-result = test_telegram_notification()
-if result['status'] == 'success':
-    print(f"Test message sent successfully.)
-else:
-    print(f"Failed to send test message: {result['error']}")
-EOF
+  if [ -z "$telegram_bot_token" ] || [ -z "$telegram_chat_id" ]; then
+    echo "Invalid Telegram configuration in $CONFIG_FILE"
+    exit 1
+  fi
 
-  deactivate
+  curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
+    -d "chat_id=$telegram_chat_id" \
+    -d "text=Test message from kuma-monitoring-reporter" \
+    -d "disable_notification=true" >/dev/null
+
+  if [ $? -eq 0 ]; then
+    echo "Test message sent successfully to Telegram (silent)."
+  else
+    echo "Failed to send test message. Check Telegram bot token and chat ID."
+  fi
 }
 
 function backup_logs() {
@@ -247,7 +251,7 @@ function restart_service() {
     echo "Systemd service restarted successfully."
     echo "Check status: systemctl status kuma-reporter.service"
   else
-    echo "No systemd service found. Please setup the service using option 4.1."
+    echo "No systemd service found. Please setup the service using option 4."
   fi
 }
 
@@ -295,27 +299,6 @@ function uninstall_project() {
   fi
 }
 
-function service_management_menu() {
-  clear
-  echo "Service Management Menu"
-  echo "-------------------------------------------"
-  echo "1. Start systemd service"
-  echo "2. Stop bot"
-  echo "3. Restart systemd service"
-  echo "0. Back to main menu"
-  echo "-------------------------------------"
-
-  read -p "Choose an option: " choice
-
-  case $choice in
-    1) setup_systemd ;;
-    2) stop_bot ;;
-    3) restart_service ;;
-    0) return ;;
-    *) echo "Invalid option"; sleep 2; service_management_menu ;;
-  esac
-}
-
 function menu() {
   clear
   echo "Automatic installer for kuma-monitoring-reporter"
@@ -323,12 +306,14 @@ function menu() {
   echo "1. Install project"
   echo "2. Configure config.json file"
   echo "3. Update project"
-  echo "4. Service management"
-  echo "5. Test Telegram configuration"
-  echo "6. Backup logs"
-  echo "7. Show project status"
-  echo "8. Check dependencies"
-  echo "9. Completely remove project"
+  echo "4. Setup systemd service"
+  echo "5. Stop bot"
+  echo "6. Test Telegram configuration"
+  echo "7. Backup logs"
+  echo "8. Show project status"
+  echo "9. Restart systemd service"
+  echo "10. Check dependencies"
+  echo "11. Completely remove project"
   echo "0. Exit"
   echo "-------------------------------------"
 
@@ -338,12 +323,14 @@ function menu() {
     1) install_project ;;
     2) edit_config ;;
     3) update_project ;;
-    4) service_management_menu ;;
-    5) test_telegram ;;
-    6) backup_logs ;;
-    7) show_status ;;
-    8) check_dependencies ;;
-    9) uninstall_project ;;
+    4) setup_systemd ;;
+    5) stop_bot ;;
+    6) test_telegram ;;
+    7) backup_logs ;;
+    8) show_status ;;
+    9) restart_service ;;
+    10) check_dependencies ;;
+    11) uninstall_project ;;
     0) echo "Bye!"; exit 0 ;;
     *) echo "Invalid option"; sleep 2; menu ;;
   esac
