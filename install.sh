@@ -173,7 +173,6 @@ EOF
     read -p "Press Enter to continue..."
 }
 
-# 🛠 Function to setup systemd service
 setup_service() {
     setup_dirs
     echo -e "${YELLOW}🛠 Setting up systemd service...${NC}"
