@@ -181,7 +181,7 @@ setup_service() {
         echo -e "${RED}❌ Config file not found. Please configure it first.${NC}"
         read -p "Press Enter to continue..."
         return 1
-    }
+    fi
     echo -e "${CYAN}⚙️ Creating service file...${NC}"
     progress_bar 5
     sudo bash -c "cat > $SERVICE_FILE" <<EOF
