@@ -21,7 +21,7 @@ def load_config():
         raise
 
 
-def send_telegram_message(message, silent=False):
+def send_message(message, silent=False):
     config = load_config()
     bot_token = config.get("telegram_bot_token")
     chat_id = config.get("telegram_chat_id")
